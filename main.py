@@ -15,7 +15,6 @@ import json
 import hashlib
 from pathlib import Path
 import secrets
-
 # Get port from environment variable for deployment
 PORT = int(os.environ.get("PORT", 8000))
 
@@ -45,11 +44,37 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Templates
 templates = Jinja2Templates(directory="templates")
 
-# In-memory storage (in production, use a database)
-users_db = {
-    "admin": {"password": "admin123", "role": "admin"},
-    "user1": {"password": "user123", "role": "user"}
-}
+# File to store users persistently
+USERS_FILE = "users_data.json"
+
+def load_users():
+    """Load users from file, create default if doesn't exist"""
+    if Path(USERS_FILE).exists():
+        try:
+            with open(USERS_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            # If file is corrupted, recreate with defaults
+            pass
+    
+    # Default users if file doesn't exist
+    default_users = {
+        "admin": {"password": "admin123", "role": "admin"},
+        "user1": {"password": "user123", "role": "user"}
+    }
+    save_users(default_users)
+    return default_users
+
+def save_users(users_data):
+    """Save users to file"""
+    try:
+        with open(USERS_FILE, 'w') as f:
+            json.dump(users_data, f, indent=2)
+    except IOError as e:
+        print(f"Error saving users: {e}")
+
+
+users_db = load_users()
 
 # File storage with expiration
 file_storage: Dict[str, Dict[str, Any]] = {}
@@ -142,6 +167,7 @@ async def create_user(
         raise HTTPException(status_code=400, detail="User already exists")
     
     users_db[username] = {"password": password, "role": role}
+    save_users(users_db)  # ← Save to file
     return {"message": "User created successfully"}
 
 @app.put("/admin/update_user/{username}")
@@ -161,6 +187,7 @@ async def update_user(
     
     users_db[username]["password"] = password
     users_db[username]["role"] = role
+    save_users(users_db)  # ← Save to file
     return {"message": "User updated successfully"}
 
 @app.delete("/admin/delete_user/{username}")
@@ -180,6 +207,7 @@ async def delete_user(
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     
     del users_db[username]
+    save_users(users_db)  # ← Save to file
     return {"message": "User deleted successfully"}
 
 @app.get("/dashboard", response_class=HTMLResponse)
