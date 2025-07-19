@@ -1,4 +1,3 @@
-<!-- templates/login.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -82,13 +81,27 @@
                     sessionStorage.setItem('auth', credentials);
                     sessionStorage.setItem('username', username);
                     
-                    // Redirect based on role
-                    if (username === 'admin') {
-                        // Set up auth for admin and redirect
-                        setupAuthHeaders(credentials);
-                        window.location.href = '/admin';
+                    // Check user role by calling a new endpoint
+                    const roleResponse = await fetch('/user_role', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': 'Basic ' + credentials
+                        }
+                    });
+                    
+                    if (roleResponse.ok) {
+                        const roleData = await roleResponse.json();
+                        
+                        // Redirect based on actual role, not username
+                        if (roleData.role === 'admin') {
+                            setupAuthHeaders(credentials);
+                            window.location.href = '/admin';
+                        } else {
+                            setupAuthHeaders(credentials);
+                            window.location.href = '/dashboard';
+                        }
                     } else {
-                        // Regular user
+                        // Fallback: redirect regular users to dashboard
                         setupAuthHeaders(credentials);
                         window.location.href = '/dashboard';
                     }

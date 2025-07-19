@@ -190,6 +190,10 @@ async def user_dashboard(request: Request, user_info: dict = Depends(verify_cred
         "user_info": user_info
     })
 
+@app.get("/user_role")
+async def get_user_role(user_info: dict = Depends(verify_credentials)):
+    return {"role": user_info["role"], "username": user_info["username"]}
+
 @app.get("/tool/{tool_id}", response_class=HTMLResponse)
 async def tool_page(request: Request, tool_id: str, user_info: dict = Depends(verify_credentials)):
     if tool_id not in TOOLS_CONFIG:
