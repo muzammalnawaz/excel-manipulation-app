@@ -1,0 +1,260 @@
+<!-- templates/tool.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ tool_config.name }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px; }
+        button:hover { background-color: #0056b3; }
+        .success { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .error { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .hidden { display: none; }
+        .back-btn { background-color: #6c757d; }
+        .back-btn:hover { background-color: #5a6268; }
+        .process-btn { background-color: #28a745; }
+        .process-btn:hover { background-color: #218838; }
+        .download-btn { background-color: #17a2b8; }
+        .download-btn:hover { background-color: #138496; }
+        .progress { margin: 20px 0; }
+        .timer { font-size: 14px; color: #666; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ tool_config.name }}</h1>
+            <button class="back-btn" onclick="goBack()">← Back to Dashboard</button>
+        </div>
+
+        <!-- Step 1: Upload File -->
+        <div class="card" id="uploadCard">
+            <h2>Step 1: Upload Excel File</h2>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="file">Choose Excel File:</label>
+                    <input type="file" id="file" name="file" accept=".xlsx,.xls" required>
+                </div>
+                <button type="submit">Upload File</button>
+            </form>
+        </div>
+
+        <!-- Step 2: Select Column -->
+        <div class="card hidden" id="columnCard">
+            <h2>Step 2: Select Column for Splitting</h2>
+            <div class="form-group">
+                <label for="column">Select Column:</label>
+                <select id="column" name="column">
+                    <option value="">Select a column...</option>
+                </select>
+            </div>
+            <button class="process-btn" onclick="processFile()">Process File</button>
+            <div class="timer" id="timer"></div>
+        </div>
+
+        <!-- Step 3: Download -->
+        <div class="card hidden" id="downloadCard">
+            <h2>Step 3: Download Processed File</h2>
+            <p>Your file has been processed successfully!</p>
+            <button class="download-btn" onclick="downloadFile()">Download File</button>
+            <div class="timer" id="downloadTimer"></div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let currentFileId = null;
+        let timerInterval = null;
+
+        // Set up authentication on page load
+        window.addEventListener('load', function() {
+            const auth = sessionStorage.getItem('auth');
+            if (auth) {
+                setupAuthHeaders(auth);
+            } else {
+                // No auth, redirect to login
+                window.location.href = '/';
+            }
+        });
+
+        function setupAuthHeaders(credentials) {
+            // Store auth globally
+            window.authCredentials = credentials;
+            
+            // Override fetch to include auth headers
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const auth = window.authCredentials || sessionStorage.getItem('auth');
+                if (auth) {
+                    if (args[1]) {
+                        args[1].headers = args[1].headers || {};
+                        args[1].headers['Authorization'] = 'Basic ' + auth;
+                    } else {
+                        args[1] = {
+                            headers: {
+                                'Authorization': 'Basic ' + auth
+                            }
+                        };
+                    }
+                }
+                return originalFetch.apply(this, args);
+            };
+        }
+
+        function goBack() {
+            window.location.href = '/dashboard';
+        }
+
+        function showMessage(message, type = 'success') {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => {
+                messagesDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        function startTimer(fileId) {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            
+            timerInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/file_status/${fileId}`);
+                    if (response.ok) {
+                        const status = await response.json();
+                        const timeLeft = status.time_left_seconds;
+                        const minutes = Math.floor(timeLeft / 60);
+                        const seconds = timeLeft % 60;
+                        
+                        const timerElements = document.querySelectorAll('.timer');
+                        timerElements.forEach(el => {
+                            el.textContent = `File expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                        });
+                        
+                        if (timeLeft <= 0) {
+                            clearInterval(timerInterval);
+                            showMessage('File has expired. Please upload a new file.', 'error');
+                            location.reload();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking file status:', error);
+                }
+            }, 1000);
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const fileInput = document.getElementById('file');
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/upload/{{ tool_id }}', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    currentFileId = result.file_id;
+                    
+                    // Populate columns dropdown
+                    const columnSelect = document.getElementById('column');
+                    columnSelect.innerHTML = '<option value="">Select a column...</option>';
+                    result.columns.forEach(column => {
+                        const option = document.createElement('option');
+                        option.value = column;
+                        option.textContent = column;
+                        columnSelect.appendChild(option);
+                    });
+                    
+                    // Show column selection
+                    document.getElementById('uploadCard').classList.add('hidden');
+                    document.getElementById('columnCard').classList.remove('hidden');
+                    
+                    // Start timer
+                    startTimer(currentFileId);
+                    
+                    showMessage(`File uploaded successfully! Found ${result.columns.length} columns.`);
+                } else {
+                    const error = await response.json();
+                    showMessage('Error uploading file: ' + error.detail, 'error');
+                }
+            } catch (error) {
+                showMessage('Error uploading file: ' + error.message, 'error');
+            }
+        });
+
+        async function processFile() {
+            const column = document.getElementById('column').value;
+            if (!column) {
+                showMessage('Please select a column.', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('column_name', column);
+            
+            try {
+                const response = await fetch(`/process/${currentFileId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    // Show download section
+                    document.getElementById('columnCard').classList.add('hidden');
+                    document.getElementById('downloadCard').classList.remove('hidden');
+                    
+                    showMessage('File processed successfully! You can now download it.');
+                } else {
+                    const error = await response.json();
+                    showMessage('Error processing file: ' + error.detail, 'error');
+                }
+            } catch (error) {
+                showMessage('Error processing file: ' + error.message, 'error');
+            }
+        }
+
+        async function downloadFile() {
+            try {
+                const response = await fetch(`/download/${currentFileId}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'processed_file.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showMessage('File downloaded successfully!');
+                } else {
+                    const error = await response.json();
+                    showMessage('Error downloading file: ' + error.detail, 'error');
+                }
+            } catch (error) {
+                showMessage('Error downloading file: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

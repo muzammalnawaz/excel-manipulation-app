@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .users-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .users-table th, .users-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        .users-table th { background-color: #f8f9fa; }
+        .logout { float: right; background-color: #dc3545; }
+        .logout:hover { background-color: #c82333; }
+        .edit-btn { background-color: #ffc107; color: #212529; padding: 5px 10px; margin-right: 5px; font-size: 12px; }
+        .edit-btn:hover { background-color: #e0a800; }
+        .delete-btn { background-color: #dc3545; padding: 5px 10px; font-size: 12px; }
+        .delete-btn:hover { background-color: #c82333; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: white; margin: 15% auto; padding: 20px; border-radius: 10px; width: 400px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close { font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #999; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Admin Dashboard</h1>
+            <button class="logout" onclick="logout()">Logout</button>
+        </div>
+
+        <div class="card">
+            <h2>Create New User</h2>
+            <form id="createUserForm">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <div class="form-group">
+                    <label for="role">Role:</label>
+                    <select id="role" name="role" required>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <button type="submit">Create User</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Existing Users</h2>
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for username, user_data in users.items() %}
+                    <tr>
+                        <td>{{ username }}</td>
+                        <td>{{ user_data.role }}</td>
+                        <td>
+                            {% if username != 'admin' %}
+                            <button class="edit-btn" onclick="editUser('{{ username }}', '{{ user_data.role }}')">Edit</button>
+                            <button class="delete-btn" onclick="deleteUser('{{ username }}')">Delete</button>
+                            {% else %}
+                            <span style="color: #666;">Protected</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Edit User Modal -->
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Edit User</h3>
+                    <span class="close" onclick="closeEditModal()">&times;</span>
+                </div>
+                <form id="editUserForm">
+                    <input type="hidden" id="editUsername" name="username">
+                    <div class="form-group">
+                        <label for="editPassword">New Password:</label>
+                        <input type="password" id="editPassword" name="password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editRole">Role:</label>
+                        <select id="editRole" name="role" required>
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <button type="submit">Update User</button>
+                    <button type="button" onclick="closeEditModal()" style="background-color: #6c757d; margin-left: 10px;">Cancel</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set up authentication on page load
+        window.addEventListener('load', function() {
+            const auth = sessionStorage.getItem('auth');
+            const username = sessionStorage.getItem('username');
+            
+            if (auth && username) {
+                setupAuthHeaders(auth);
+                // Set welcome message based on user
+                const welcomeElement = document.getElementById('welcomeMessage');
+                if (username === 'admin') {
+                    welcomeElement.textContent = 'Welcome Admin!';
+                } else {
+                    welcomeElement.textContent = `Welcome, ${username}!`;
+                }
+            } else {
+                // No auth, redirect to login
+                window.location.href = '/';
+            }
+        });
+
+        function setupAuthHeaders(credentials) {
+            // Store auth globally
+            window.authCredentials = credentials;
+            
+            // Override fetch to include auth headers
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const auth = window.authCredentials || sessionStorage.getItem('auth');
+                if (auth) {
+                    if (args[1]) {
+                        args[1].headers = args[1].headers || {};
+                        args[1].headers['Authorization'] = 'Basic ' + auth;
+                    } else {
+                        args[1] = {
+                            headers: {
+                                'Authorization': 'Basic ' + auth
+                            }
+                        };
+                    }
+                }
+                return originalFetch.apply(this, args);
+            };
+        }
+
+        function logout() {
+            sessionStorage.removeItem('auth');
+            sessionStorage.removeItem('username');
+            window.location.href = '/';
+        }
+
+        function editUser(username, currentRole) {
+            document.getElementById('editUsername').value = username;
+            document.getElementById('editPassword').value = '';
+            document.getElementById('editRole').value = currentRole;
+            document.getElementById('editModal').style.display = 'block';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        function deleteUser(username) {
+            if (confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+                fetch(`/admin/delete_user/${username}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Basic ' + (window.authCredentials || sessionStorage.getItem('auth'))
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        alert('User deleted successfully');
+                        location.reload();
+                    } else {
+                        return response.json().then(error => {
+                            alert('Error: ' + error.detail);
+                        });
+                    }
+                })
+                .catch(error => {
+                    alert('Error deleting user: ' + error.message);
+                });
+            }
+        }
+
+        document.getElementById('editUserForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const username = formData.get('username');
+            
+            try {
+                const response = await fetch(`/admin/update_user/${username}`, {
+                    method: 'PUT',
+                    body: formData,
+                    headers: {
+                        'Authorization': 'Basic ' + (window.authCredentials || sessionStorage.getItem('auth'))
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('User updated successfully');
+                    closeEditModal();
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Error updating user: ' + error.message);
+            }
+        });
+
+        document.getElementById('createUserForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            try {
+                const response = await fetch('/admin/create_user', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Authorization': 'Basic ' + (window.authCredentials || sessionStorage.getItem('auth'))
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('User created successfully');
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Error creating user: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>
