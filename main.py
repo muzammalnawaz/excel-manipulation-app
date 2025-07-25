@@ -10,11 +10,12 @@ import os
 import uuid
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import json
 import hashlib
 from pathlib import Path
 import secrets
+import numpy as np
 # Get port from environment variable for deployment
 PORT = int(os.environ.get("PORT", 8000))
 
@@ -85,6 +86,11 @@ TOOLS_CONFIG = {
         "name": "Excel Sheet Splitter",
         "description": "Split Excel data into multiple sheets based on column values",
         "processor": "split_excel_by_column"
+    },
+    "data_summarizer": {
+        "name": "Summarize Data",
+        "description": "Group data by selected columns and perform aggregation operations on numerical columns",
+        "processor": "summarize_data"
     }
     # Future tools can be added here
 }
@@ -228,7 +234,14 @@ async def tool_page(request: Request, tool_id: str, user_info: dict = Depends(ve
         raise HTTPException(status_code=404, detail="Tool not found")
     
     tool_config = TOOLS_CONFIG[tool_id]
-    return templates.TemplateResponse("tool.html", {
+    
+    # Use different templates based on tool
+    if tool_id == "data_summarizer":
+        template_name = "summarizer.html"
+    else:
+        template_name = "tool.html"
+    
+    return templates.TemplateResponse(template_name, {
         "request": request,
         "tool_id": tool_id,
         "tool_config": tool_config,
@@ -262,7 +275,7 @@ async def upload_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving file: {str(e)}")
     
-    # Read Excel file to get columns
+    # Read Excel file to get columns and data info
     try:
         df = pd.read_excel(file_path, sheet_name=0)  # Read first sheet
         columns = df.columns.tolist()
@@ -271,6 +284,16 @@ async def upload_file(
         if df.empty:
             os.remove(file_path)
             raise HTTPException(status_code=400, detail="Excel file is empty")
+        
+        # For summarizer tool, also get column data types
+        column_info = {}
+        if tool_id == "data_summarizer":
+            for col in columns:
+                # Check if column is numeric
+                if pd.api.types.is_numeric_dtype(df[col]):
+                    column_info[col] = "numeric"
+                else:
+                    column_info[col] = "categorical"
             
     except Exception as e:
         # Clean up file if error occurs
@@ -283,6 +306,7 @@ async def upload_file(
         "original_path": file_path,
         "original_filename": file.filename,
         "columns": columns,
+        "column_info": column_info if tool_id == "data_summarizer" else {},
         "tool_id": tool_id,
         "user": user_info["username"],
         "uploaded_at": datetime.now(),
@@ -290,16 +314,25 @@ async def upload_file(
         "processed": False
     }
     
-    return {
+    response_data = {
         "file_id": file_id,
         "columns": columns,
         "filename": file.filename
     }
+    
+    # Add column info for summarizer tool
+    if tool_id == "data_summarizer":
+        response_data["column_info"] = column_info
+    
+    return response_data
 
 @app.post("/process/{file_id}")
 async def process_file(
     file_id: str,
-    column_name: str = Form(...),
+    column_name: str = Form(None),
+    groupby_columns: str = Form(None),  # JSON string of selected columns
+    numeric_column: str = Form(None),
+    operation: str = Form(None),
     user_info: dict = Depends(verify_credentials)
 ):
     if file_id not in file_storage:
@@ -315,24 +348,45 @@ async def process_file(
     if datetime.now() > file_info["expires_at"]:
         raise HTTPException(status_code=410, detail="File has expired")
     
-    # Check if column exists
-    if column_name not in file_info["columns"]:
-        raise HTTPException(status_code=400, detail="Column not found")
-    
     try:
         # Process the file based on tool
         tool_id = file_info["tool_id"]
         processor_name = TOOLS_CONFIG[tool_id]["processor"]
         
         if processor_name == "split_excel_by_column":
+            if not column_name or column_name not in file_info["columns"]:
+                raise HTTPException(status_code=400, detail="Valid column name required")
             processed_path = split_excel_by_column(file_info["original_path"], column_name, file_id)
+            
+        elif processor_name == "summarize_data":
+            if not groupby_columns or not numeric_column or not operation:
+                raise HTTPException(status_code=400, detail="All fields are required for summarization")
+            
+            # Parse groupby columns from JSON string
+            try:
+                groupby_cols = json.loads(groupby_columns)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="Invalid groupby columns format")
+            
+            processed_path = summarize_data(
+                file_info["original_path"], 
+                groupby_cols, 
+                numeric_column, 
+                operation, 
+                file_id
+            )
         else:
             raise HTTPException(status_code=400, detail="Unknown processor")
         
         # Update file info
         file_storage[file_id]["processed"] = True
         file_storage[file_id]["processed_path"] = processed_path
-        file_storage[file_id]["column_used"] = column_name
+        if column_name:
+            file_storage[file_id]["column_used"] = column_name
+        if groupby_columns:
+            file_storage[file_id]["groupby_columns"] = groupby_columns
+            file_storage[file_id]["numeric_column"] = numeric_column
+            file_storage[file_id]["operation"] = operation
         
         return {"message": "File processed successfully", "download_ready": True}
     
@@ -381,6 +435,98 @@ def split_excel_by_column(file_path: str, column_name: str, file_id: str) -> str
     except Exception as e:
         raise Exception(f"Error splitting Excel file: {str(e)}")
 
+def summarize_data(file_path: str, groupby_columns: List[str], numeric_column: str, operation: str, file_id: str) -> str:
+    """Summarize data by grouping and applying aggregation operations"""
+    try:
+        # Read the Excel file
+        df = pd.read_excel(file_path, sheet_name=0)
+        
+        # Validate groupby columns
+        for col in groupby_columns:
+            if col not in df.columns:
+                raise ValueError(f"Groupby column '{col}' not found in the file")
+        
+        # Validate numeric column
+        if numeric_column not in df.columns:
+            raise ValueError(f"Numeric column '{numeric_column}' not found in the file")
+        
+        # Check if numeric column is actually numeric
+        if not pd.api.types.is_numeric_dtype(df[numeric_column]):
+            raise ValueError(f"Column '{numeric_column}' is not numeric")
+        
+        # Validate operation
+        valid_operations = ['sum', 'mean', 'median', 'max', 'min', 'count']
+        if operation not in valid_operations:
+            raise ValueError(f"Operation '{operation}' is not valid. Choose from: {', '.join(valid_operations)}")
+        
+        # Remove rows with NaN in groupby columns or numeric column
+        df_clean = df.dropna(subset=groupby_columns + [numeric_column])
+        
+        if df_clean.empty:
+            raise ValueError("No valid data remaining after removing missing values")
+        
+        # Group by the specified columns and apply the operation
+        if operation == 'sum':
+            result = df_clean.groupby(groupby_columns)[numeric_column].sum().reset_index()
+        elif operation == 'mean':
+            result = df_clean.groupby(groupby_columns)[numeric_column].mean().reset_index()
+        elif operation == 'median':
+            result = df_clean.groupby(groupby_columns)[numeric_column].median().reset_index()
+        elif operation == 'max':
+            result = df_clean.groupby(groupby_columns)[numeric_column].max().reset_index()
+        elif operation == 'min':
+            result = df_clean.groupby(groupby_columns)[numeric_column].min().reset_index()
+        elif operation == 'count':
+            result = df_clean.groupby(groupby_columns)[numeric_column].count().reset_index()
+        
+        # Rename the result column to be more descriptive
+        result = result.rename(columns={numeric_column: f"{numeric_column}_{operation}"})
+        
+        # Add a summary row if applicable
+        if operation in ['sum', 'mean', 'count']:
+            total_row = {}
+            for col in groupby_columns:
+                total_row[col] = 'TOTAL'
+            
+            if operation == 'sum':
+                total_row[f"{numeric_column}_{operation}"] = result[f"{numeric_column}_{operation}"].sum()
+            elif operation == 'mean':
+                total_row[f"{numeric_column}_{operation}"] = result[f"{numeric_column}_{operation}"].mean()
+            elif operation == 'count':
+                total_row[f"{numeric_column}_{operation}"] = result[f"{numeric_column}_{operation}"].sum()
+            
+            # Add total row
+            result = pd.concat([result, pd.DataFrame([total_row])], ignore_index=True)
+        
+        # Create output file path
+        output_path = f"downloads/{file_id}_summarized.xlsx"
+        
+        # Save to Excel with formatting
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            result.to_excel(writer, sheet_name='Summary', index=False)
+            
+            # Get the workbook and worksheet
+            workbook = writer.book
+            worksheet = writer.sheets['Summary']
+            
+            # Auto-adjust column widths
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        return output_path
+        
+    except Exception as e:
+        raise Exception(f"Error summarizing data: {str(e)}")
+
 @app.get("/download/{file_id}")
 async def download_file(file_id: str, user_info: dict = Depends(verify_credentials)):
     if file_id not in file_storage:
@@ -403,10 +549,14 @@ async def download_file(file_id: str, user_info: dict = Depends(verify_credentia
     if not os.path.exists(processed_path):
         raise HTTPException(status_code=404, detail="Processed file not found")
     
-    # Generate download filename
+    # Generate download filename based on tool
     original_name = file_info["original_filename"]
     name_without_ext = os.path.splitext(original_name)[0]
-    download_filename = f"{name_without_ext}_processed.xlsx"
+    
+    if file_info["tool_id"] == "data_summarizer":
+        download_filename = f"{name_without_ext}_summarized.xlsx"
+    else:
+        download_filename = f"{name_without_ext}_processed.xlsx"
     
     return FileResponse(
         processed_path,

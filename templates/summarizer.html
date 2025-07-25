@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ tool_config.name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 32px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 32px;
+            border-radius: 24px;
+            margin-bottom: 32px;
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.1),
+                0 0 0 1px rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+        }
+
+        h1, h2 {
+            color: #2d3748;
+            font-weight: 700;
+        }
+
+        h1 {
+            font-size: 32px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }
+
+        h2 {
+            font-size: 24px;
+            margin-bottom: 24px;
+            position: relative;
+            padding-bottom: 12px;
+        }
+
+        h2::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 32px;
+            border-radius: 24px;
+            margin-bottom: 32px;
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.1),
+                0 0 0 1px rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            animation: fadeInUp 0.6s ease-out both;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .card:nth-child(2) { animation-delay: 0.1s; }
+        .card:nth-child(3) { animation-delay: 0.2s; }
+        .card:nth-child(4) { animation-delay: 0.3s; }
+        .card:nth-child(5) { animation-delay: 0.4s; }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 14px;
+            letter-spacing: 0.025em;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            background: #f7fafc;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: #ffffff;
+            box-shadow: 
+                0 0 0 3px rgba(102, 126, 234, 0.1),
+                0 4px 12px rgba(102, 126, 234, 0.15);
+            transform: translateY(-2px);
+        }
+
+        input[type="file"] {
+            padding: 16px;
+            background: rgba(102, 126, 234, 0.05);
+            border: 2px dashed #667eea;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        input[type="file"]:hover {
+            background: rgba(102, 126, 234, 0.1);
+            border-color: #764ba2;
+        }
+
+        button {
+            padding: 16px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            margin-right: 12px;
+            margin-bottom: 8px;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        button:hover::before {
+            left: 100%;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button[type="submit"] {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+        }
+
+        button[type="submit"]:hover {
+            box-shadow: 0 12px 24px rgba(102, 126, 234, 0.4);
+        }
+
+        .back-btn {
+            background: linear-gradient(135deg, #a0aec0, #718096);
+            color: white;
+            box-shadow: 0 8px 16px rgba(160, 174, 192, 0.3);
+        }
+
+        .back-btn:hover {
+            box-shadow: 0 12px 24px rgba(160, 174, 192, 0.4);
+        }
+
+        .process-btn {
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            color: white;
+            box-shadow: 0 8px 16px rgba(56, 161, 105, 0.3);
+        }
+
+        .process-btn:hover {
+            box-shadow: 0 12px 24px rgba(56, 161, 105, 0.4);
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #3182ce, #2c5282);
+            color: white;
+            box-shadow: 0 8px 16px rgba(49, 130, 206, 0.3);
+        }
+
+        .download-btn:hover {
+            box-shadow: 0 12px 24px rgba(49, 130, 206, 0.4);
+        }
+
+        .success {
+            background: linear-gradient(135deg, #9ae6b4, #68d391);
+            color: #22543d;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border-left: 4px solid #38a169;
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        .info {
+            background: linear-gradient(135deg, #bee3f8, #90cdf4);
+            color: #2c5282;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border-left: 4px solid #3182ce;
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        .error {
+            background: linear-gradient(135deg, #fed7d7, #feb2b2);
+            color: #c53030;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border-left: 4px solid #e53e3e;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        button:disabled:hover {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+
+        .step {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(160, 174, 192, 0.3);
+            color: #718096;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .step.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .step.completed {
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            color: white;
+        }
+
+        .step::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 60px;
+            width: 40px;
+            height: 2px;
+            background: rgba(160, 174, 192, 0.3);
+            transform: translateY(-50%);
+        }
+
+        .step:last-child::after {
+            display: none;
+        }
+
+        .step.completed::after {
+            background: linear-gradient(90deg, #38a169, #2f855a);
+        }
+
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            background: rgba(102, 126, 234, 0.03);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: rgba(102, 126, 234, 0.08);
+        }
+
+        .upload-area.dragover {
+            border-color: #f093fb;
+            background: rgba(240, 147, 251, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 16px;
+        }
+
+        .upload-text {
+            color: #4a5568;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .upload-subtext {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .column-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .column-item {
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            background: #f7fafc;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .column-item:hover {
+            border-color: #667eea;
+            background: #ffffff;
+        }
+
+        .column-item.selected {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .column-item input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        .column-type {
+            font-size: 12px;
+            color: #718096;
+            font-weight: 500;
+            margin-top: 4px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .timer {
+            font-size: 14px;
+            color: #718096;
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .floating-elements {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .floating-element {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            animation: float 15s ease-in-out infinite;
+        }
+
+        .floating-element:nth-child(1) {
+            width: 120px;
+            height: 120px;
+            top: 10%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .floating-element:nth-child(2) {
+            width: 80px;
+            height: 80px;
+            top: 60%;
+            right: 10%;
+            animation-delay: 5s;
+        }
+
+        .floating-element:nth-child(3) {
+            width: 160px;
+            height: 160px;
+            bottom: 20%;
+            left: 50%;
+            animation-delay: 10s;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) rotate(0deg);
+            }
+            33% {
+                transform: translateY(-20px) rotate(120deg);
+            }
+            66% {
+                transform: translateY(10px) rotate(240deg);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+            
+            .header, .card {
+                padding: 20px;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 16px;
+                text-align: center;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            h2 {
+                font-size: 20px;
+            }
+            
+            .step-indicator {
+                margin-bottom: 20px;
+            }
+            
+            .step {
+                width: 32px;
+                height: 32px;
+                margin: 0 8px;
+                font-size: 14px;
+            }
+            
+            .step::after {
+                width: 20px;
+                left: 40px;
+            }
+
+            .column-selector {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-elements">
+        <div class="floating-element"></div>
+        <div class="floating-element"></div>
+        <div class="floating-element"></div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>{{ tool_config.name }}</h1>
+            <button class="back-btn" onclick="goBack()">← Back to Dashboard</button>
+        </div>
+
+        <div class="step-indicator">
+            <div class="step active" id="step1">1</div>
+            <div class="step" id="step2">2</div>
+            <div class="step" id="step3">3</div>
+            <div class="step" id="step4">4</div>
+        </div>
+
+        <!-- Step 1: Upload File -->
+        <div class="card" id="uploadCard">
+            <h2>Step 1: Upload Excel File</h2>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <div class="upload-area" onclick="document.getElementById('file').click()">
+                        <div class="upload-icon">📊</div>
+                        <div class="upload-text">Click to choose Excel file</div>
+                        <div class="upload-subtext">or drag and drop here</div>
+                        <input type="file" id="file" name="file" accept=".xlsx,.xls" required style="display: none;">
+                    </div>
+                </div>
+                <button type="submit">Upload File</button>
+            </form>
+        </div>
+
+        <!-- Step 2: Select Groupby Columns -->
+        <div class="card hidden" id="groupbyCard">
+            <h2>Step 2: Select Columns for Grouping</h2>
+            <div class="section-title">Select one or more columns to group by:</div>
+            <div class="column-selector" id="groupbyColumns">
+                <!-- Will be populated after upload -->
+            </div>
+            <button onclick="nextToNumericSelection()" disabled id="groupbyNextBtn">Next: Select Numeric Column</button>
+            <div class="timer" id="timer1"></div>
+        </div>
+
+        <!-- Step 3: Select Numeric Column and Operation -->
+        <div class="card hidden" id="numericCard">
+            <h2>Step 3: Select Numeric Column & Operation</h2>
+            
+            <div class="form-group">
+                <div class="section-title">Select numeric column to analyze:</div>
+                <select id="numericColumn" name="numericColumn" required>
+                    <option value="">Select a numeric column...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <div class="section-title">Select operation:</div>
+                <select id="operation" name="operation" required>
+                    <option value="">Select operation...</option>
+                    <option value="sum">Sum</option>
+                    <option value="mean">Mean (Average)</option>
+                    <option value="median">Median</option>
+                    <option value="max">Maximum</option>
+                    <option value="min">Minimum</option>
+                    <option value="count">Count</option>
+                </select>
+            </div>
+
+            <button class="process-btn" onclick="processFile()">Generate Summary</button>
+            <div class="timer" id="timer2"></div>
+        </div>
+
+        <!-- Step 4: Download -->
+        <div class="card hidden" id="downloadCard">
+            <h2>Step 4: Download Summary Report</h2>
+            <div style="text-align: center; padding: 20px;">
+                <div style="font-size: 64px; margin-bottom: 16px;">📈</div>
+                <p style="font-size: 18px; color: #2d3748; margin-bottom: 8px;">Your data has been summarized successfully!</p>
+                <p style="color: #718096; margin-bottom: 24px;">The summary report is ready for download.</p>
+            </div>
+            <button class="download-btn" onclick="downloadFile()">Download Summary</button>
+            <div class="timer" id="downloadTimer"></div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let currentFileId = null;
+        let timerInterval = null;
+        let currentStep = 1;
+        let selectedGroupbyColumns = [];
+        let columnInfo = {};
+
+        // Set up authentication on page load
+        window.addEventListener('load', function() {
+            const auth = sessionStorage.getItem('auth');
+            if (auth) {
+                setupAuthHeaders(auth);
+                setupDragAndDrop();
+            } else {
+                window.location.href = '/';
+            }
+        });
+
+        function setupAuthHeaders(credentials) {
+            window.authCredentials = credentials;
+            
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const auth = window.authCredentials || sessionStorage.getItem('auth');
+                if (auth) {
+                    if (args[1]) {
+                        args[1].headers = args[1].headers || {};
+                        args[1].headers['Authorization'] = 'Basic ' + auth;
+                    } else {
+                        args[1] = {
+                            headers: {
+                                'Authorization': 'Basic ' + auth
+                            }
+                        };
+                    }
+                }
+                return originalFetch.apply(this, args);
+            };
+        }
+
+        function setupDragAndDrop() {
+            const uploadArea = document.querySelector('.upload-area');
+            const fileInput = document.getElementById('file');
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    updateFileName(files[0].name);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    updateFileName(e.target.files[0].name);
+                }
+            });
+        }
+
+        function updateFileName(fileName) {
+            const uploadText = document.querySelector('.upload-text');
+            const uploadSubtext = document.querySelector('.upload-subtext');
+            uploadText.textContent = fileName;
+            uploadSubtext.textContent = 'File selected - ready to upload';
+        }
+
+        function updateStep(step) {
+            for (let i = 1; i <= 4; i++) {
+                const stepEl = document.getElementById(`step${i}`);
+                stepEl.classList.remove('active', 'completed');
+                if (i < step) {
+                    stepEl.classList.add('completed');
+                } else if (i === step) {
+                    stepEl.classList.add('active');
+                }
+            }
+            currentStep = step;
+        }
+
+        function goBack() {
+            window.location.href = '/dashboard';
+        }
+
+        function showMessage(message, type = 'success') {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => {
+                messagesDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        function startTimer(fileId) {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            
+            timerInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/file_status/${fileId}`);
+                    if (response.ok) {
+                        const status = await response.json();
+                        const timeLeft = status.time_left_seconds;
+                        const minutes = Math.floor(timeLeft / 60);
+                        const seconds = timeLeft % 60;
+                        
+                        const timerElements = document.querySelectorAll('.timer');
+                        timerElements.forEach(el => {
+                            el.textContent = `⏱️ File expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                        });
+                        
+                        if (timeLeft <= 0) {
+                            clearInterval(timerInterval);
+                            showMessage('File has expired. Please upload a new file.', 'error');
+                            location.reload();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking file status:', error);
+                }
+            }, 1000);
+        }
+
+        function populateGroupbyColumns(columns, columnTypes) {
+            const container = document.getElementById('groupbyColumns');
+            container.innerHTML = '';
+            
+            columns.forEach(column => {
+                const columnType = columnTypes[column] || 'unknown';
+                
+                const div = document.createElement('div');
+                div.className = 'column-item';
+                div.innerHTML = `
+                    <input type="checkbox" id="groupby_${column}" value="${column}" onchange="updateGroupbySelection()">
+                    <label for="groupby_${column}" style="cursor: pointer; margin: 0;">
+                        ${column}
+                        <div class="column-type">${columnType}</div>
+                    </label>
+                `;
+                
+                div.onclick = function(e) {
+                    if (e.target.type !== 'checkbox') {
+                        const checkbox = div.querySelector('input[type="checkbox"]');
+                        checkbox.checked = !checkbox.checked;
+                        updateGroupbySelection();
+                    }
+                };
+                
+                container.appendChild(div);
+            });
+        }
+
+        function populateNumericColumns(columns, columnTypes) {
+            const select = document.getElementById('numericColumn');
+            select.innerHTML = '<option value="">Select a numeric column...</option>';
+            
+            columns.forEach(column => {
+                if (columnTypes[column] === 'numeric') {
+                    const option = document.createElement('option');
+                    option.value = column;
+                    option.textContent = column;
+                    select.appendChild(option);
+                }
+            });
+        }
+
+        function updateGroupbySelection() {
+            selectedGroupbyColumns = [];
+            const checkboxes = document.querySelectorAll('#groupbyColumns input[type="checkbox"]:checked');
+            
+            checkboxes.forEach(checkbox => {
+                selectedGroupbyColumns.push(checkbox.value);
+                checkbox.closest('.column-item').classList.add('selected');
+            });
+            
+            // Remove selected class from unchecked items
+            const allItems = document.querySelectorAll('#groupbyColumns .column-item');
+            allItems.forEach(item => {
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (!checkbox.checked) {
+                    item.classList.remove('selected');
+                }
+            });
+            
+            // Enable/disable next button
+            const nextBtn = document.getElementById('groupbyNextBtn');
+            nextBtn.disabled = selectedGroupbyColumns.length === 0;
+        }
+
+        function nextToNumericSelection() {
+            if (selectedGroupbyColumns.length === 0) {
+                showMessage('Please select at least one column for grouping.', 'error');
+                return;
+            }
+            
+            document.getElementById('groupbyCard').classList.add('hidden');
+            document.getElementById('numericCard').classList.remove('hidden');
+            updateStep(3);
+            
+            showMessage(`Selected ${selectedGroupbyColumns.length} column(s) for grouping: ${selectedGroupbyColumns.join(', ')}`);
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const fileInput = document.getElementById('file');
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.textContent;
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `
+                <span style="display: inline-flex; align-items: center; gap: 8px;">
+                    <div class="spinner"></div>
+                    Uploading...
+                </span>
+            `;
+            showMessage('Uploading file, please wait...', 'info');
+            
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/upload/{{ tool_id }}', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    currentFileId = result.file_id;
+                    columnInfo = result.column_info;
+                    
+                    // Populate groupby columns
+                    populateGroupbyColumns(result.columns, result.column_info);
+                    
+                    // Populate numeric columns
+                    populateNumericColumns(result.columns, result.column_info);
+                    
+                    // Show groupby selection
+                    document.getElementById('uploadCard').classList.add('hidden');
+                    document.getElementById('groupbyCard').classList.remove('hidden');
+                    
+                    updateStep(2);
+                    startTimer(currentFileId);
+                    
+                    const numericCount = Object.values(result.column_info).filter(type => type === 'numeric').length;
+                    showMessage(`File uploaded successfully! Found ${result.columns.length} columns (${numericCount} numeric).`);
+                } else {
+                    const error = await response.json();
+                    showMessage('Error uploading file: ' + error.detail, 'error');
+                }
+            } catch (error) {
+                showMessage('Error uploading file: ' + error.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalBtnText;
+            }
+        });
+
+        async function processFile() {
+            const numericColumn = document.getElementById('numericColumn').value;
+            const operation = document.getElementById('operation').value;
+            
+            if (selectedGroupbyColumns.length === 0) {
+                showMessage('Please select at least one groupby column.', 'error');
+                return;
+            }
+            
+            if (!numericColumn) {
+                showMessage('Please select a numeric column.', 'error');
+                return;
+            }
+            
+            if (!operation) {
+                showMessage('Please select an operation.', 'error');
+                return;
+            }
+            
+            const processBtn = document.querySelector('.process-btn');
+            const originalBtnText = processBtn.textContent;
+            
+            processBtn.disabled = true;
+            processBtn.innerHTML = `
+                <span style="display: inline-flex; align-items: center; gap: 8px;">
+                    <div class="spinner"></div>
+                    Processing...
+                </span>
+            `;
+            showMessage('Generating summary, please wait...', 'info');
+            
+            const formData = new FormData();
+            formData.append('groupby_columns', JSON.stringify(selectedGroupbyColumns));
+            formData.append('numeric_column', numericColumn);
+            formData.append('operation', operation);
+            
+            try {
+                const response = await fetch(`/process/${currentFileId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    document.getElementById('numericCard').classList.add('hidden');
+                    document.getElementById('downloadCard').classList.remove('hidden');
+                    
+                    updateStep(4);
+                    
+                    showMessage(`Summary generated successfully! Grouped by: ${selectedGroupbyColumns.join(', ')}, ${operation} of ${numericColumn}`);
+                } else {
+                    const error = await response.json();
+                    showMessage('Error processing file: ' + error.detail, 'error');
+                }
+            } catch (error) {
+                showMessage('Error processing file: ' + error.message, 'error');
+            } finally {
+                processBtn.disabled = false;
+                processBtn.textContent = originalBtnText;
+            }
+        }
+
+        async function downloadFile() {
+            try {
+                const response = await fetch(`/download/${currentFileId}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'data_summary.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showMessage('Summary downloaded successfully!');
+                } else {
+                    const error = await response.json();
+                    showMessage('Error downloading file: ' + error.detail, 'error');
+                }
+            } catch (error) {
+                showMessage('Error downloading file: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
