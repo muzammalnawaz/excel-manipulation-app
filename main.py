@@ -38,6 +38,7 @@ os.makedirs("uploads", exist_ok=True)
 os.makedirs("downloads", exist_ok=True)
 os.makedirs("templates", exist_ok=True)
 os.makedirs("static", exist_ok=True)
+os.makedirs("data", exist_ok=True)  # New persistent data directory
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -45,18 +46,27 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Templates
 templates = Jinja2Templates(directory="templates")
 
-# File to store users persistently
-USERS_FILE = "users_data.json"
+# File to store users persistently - moved to data directory
+USERS_FILE = "data/users_data.json"
 
 def load_users():
     """Load users from file, create default if doesn't exist"""
     if Path(USERS_FILE).exists():
         try:
             with open(USERS_FILE, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            # If file is corrupted, recreate with defaults
-            pass
+                users_data = json.load(f)
+                print(f"Loaded {len(users_data)} users from {USERS_FILE}")
+                return users_data
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Error loading users file: {e}")
+            # If file is corrupted, create backup and recreate
+            backup_file = f"{USERS_FILE}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            try:
+                if Path(USERS_FILE).exists():
+                    Path(USERS_FILE).rename(backup_file)
+                    print(f"Corrupted users file backed up to {backup_file}")
+            except Exception as backup_error:
+                print(f"Could not backup corrupted file: {backup_error}")
     
     # Default users if file doesn't exist
     default_users = {
@@ -64,16 +74,35 @@ def load_users():
         "user1": {"password": "user123", "role": "user"}
     }
     save_users(default_users)
+    print("Created default users")
     return default_users
 
 def save_users(users_data):
-    """Save users to file"""
+    """Save users to file with backup"""
     try:
+        # Create backup of existing file before saving
+        if Path(USERS_FILE).exists():
+            backup_file = f"{USERS_FILE}.backup"
+            Path(USERS_FILE).rename(backup_file)
+        
+        # Save new data
         with open(USERS_FILE, 'w') as f:
             json.dump(users_data, f, indent=2)
+        
+        print(f"Saved {len(users_data)} users to {USERS_FILE}")
+        
+        # Remove old backup if save was successful
+        backup_file = f"{USERS_FILE}.backup"
+        if Path(backup_file).exists():
+            Path(backup_file).unlink()
+            
     except IOError as e:
         print(f"Error saving users: {e}")
-
+        # Restore backup if save failed
+        backup_file = f"{USERS_FILE}.backup"
+        if Path(backup_file).exists():
+            Path(backup_file).rename(USERS_FILE)
+            print("Restored backup due to save failure")
 
 users_db = load_users()
 
@@ -89,7 +118,7 @@ TOOLS_CONFIG = {
     },
     "data_summarizer": {
         "name": "Summarize Data",
-        "description": "Group data by selected columns and perform aggregation operations on numerical columns",
+        "description": "Group data by selected columns and perform aggregation operations on multiple numerical columns",
         "processor": "summarize_data"
     },
     "stock_distribution": {
@@ -154,6 +183,7 @@ async def cleanup_expired_files():
 async def startup_event():
     # Start cleanup task
     asyncio.create_task(cleanup_expired_files())
+    print("Application started successfully")
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -178,7 +208,7 @@ async def create_user(
         raise HTTPException(status_code=400, detail="User already exists")
     
     users_db[username] = {"password": password, "role": role}
-    save_users(users_db)  # ← Save to file
+    save_users(users_db)
     return {"message": "User created successfully"}
 
 @app.put("/admin/update_user/{username}")
@@ -198,7 +228,7 @@ async def update_user(
     
     users_db[username]["password"] = password
     users_db[username]["role"] = role
-    save_users(users_db)  # ← Save to file
+    save_users(users_db)
     return {"message": "User updated successfully"}
 
 @app.delete("/admin/delete_user/{username}")
@@ -218,7 +248,7 @@ async def delete_user(
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     
     del users_db[username]
-    save_users(users_db)  # ← Save to file
+    save_users(users_db)
     return {"message": "User deleted successfully"}
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -254,8 +284,6 @@ async def tool_page(request: Request, tool_id: str, user_info: dict = Depends(ve
         "tool_config": tool_config,
         "user_info": user_info
     })
-
-
 
 @app.post("/process/{file_id}")
 async def process_file(
@@ -300,22 +328,23 @@ async def process_file(
         elif processor_name == "summarize_data":
             form = await request.form()
             groupby_columns = form.get("groupby_columns")
-            numeric_column = form.get("numeric_column")
+            numeric_columns = form.get("numeric_columns")  # Changed to support multiple columns
             operation = form.get("operation")
             
-            if not groupby_columns or not numeric_column or not operation:
+            if not groupby_columns or not numeric_columns or not operation:
                 raise HTTPException(status_code=400, detail="All fields are required for summarization")
             
-            # Parse groupby columns from JSON string
+            # Parse columns from JSON string
             try:
                 groupby_cols = json.loads(groupby_columns)
+                numeric_cols = json.loads(numeric_columns)  # Parse multiple numeric columns
             except json.JSONDecodeError:
-                raise HTTPException(status_code=400, detail="Invalid groupby columns format")
+                raise HTTPException(status_code=400, detail="Invalid columns format")
             
             processed_path = summarize_data(
                 file_info["original_path"], 
                 groupby_cols, 
-                numeric_column, 
+                numeric_cols,  # Pass multiple columns
                 operation, 
                 file_id
             )
@@ -375,8 +404,8 @@ def split_excel_by_column(file_path: str, column_name: str, file_id: str) -> str
     except Exception as e:
         raise Exception(f"Error splitting Excel file: {str(e)}")
 
-def summarize_data(file_path: str, groupby_columns: List[str], numeric_column: str, operation: str, file_id: str) -> str:
-    """Summarize data by grouping and applying aggregation operations"""
+def summarize_data(file_path: str, groupby_columns: List[str], numeric_columns: List[str], operation: str, file_id: str) -> str:
+    """Summarize data by grouping and applying aggregation operations to multiple numeric columns"""
     try:
         # Read the Excel file
         df = pd.read_excel(file_path, sheet_name=0)
@@ -386,54 +415,62 @@ def summarize_data(file_path: str, groupby_columns: List[str], numeric_column: s
             if col not in df.columns:
                 raise ValueError(f"Groupby column '{col}' not found in the file")
         
-        # Validate numeric column
-        if numeric_column not in df.columns:
-            raise ValueError(f"Numeric column '{numeric_column}' not found in the file")
-        
-        # Check if numeric column is actually numeric
-        if not pd.api.types.is_numeric_dtype(df[numeric_column]):
-            raise ValueError(f"Column '{numeric_column}' is not numeric")
+        # Validate numeric columns
+        for col in numeric_columns:
+            if col not in df.columns:
+                raise ValueError(f"Numeric column '{col}' not found in the file")
+            # Check if numeric column is actually numeric
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                raise ValueError(f"Column '{col}' is not numeric")
         
         # Validate operation
         valid_operations = ['sum', 'mean', 'median', 'max', 'min', 'count']
         if operation not in valid_operations:
             raise ValueError(f"Operation '{operation}' is not valid. Choose from: {', '.join(valid_operations)}")
         
-        # Remove rows with NaN in groupby columns or numeric column
-        df_clean = df.dropna(subset=groupby_columns + [numeric_column])
+        # Remove rows with NaN in groupby columns or numeric columns
+        df_clean = df.dropna(subset=groupby_columns + numeric_columns)
         
         if df_clean.empty:
             raise ValueError("No valid data remaining after removing missing values")
         
-        # Group by the specified columns and apply the operation
+        # Group by the specified columns and apply the operation to all numeric columns
+        grouped = df_clean.groupby(groupby_columns)
+        
+        # Apply operation to all numeric columns
         if operation == 'sum':
-            result = df_clean.groupby(groupby_columns)[numeric_column].sum().reset_index()
+            result = grouped[numeric_columns].sum().reset_index()
         elif operation == 'mean':
-            result = df_clean.groupby(groupby_columns)[numeric_column].mean().reset_index()
+            result = grouped[numeric_columns].mean().reset_index()
         elif operation == 'median':
-            result = df_clean.groupby(groupby_columns)[numeric_column].median().reset_index()
+            result = grouped[numeric_columns].median().reset_index()
         elif operation == 'max':
-            result = df_clean.groupby(groupby_columns)[numeric_column].max().reset_index()
+            result = grouped[numeric_columns].max().reset_index()
         elif operation == 'min':
-            result = df_clean.groupby(groupby_columns)[numeric_column].min().reset_index()
+            result = grouped[numeric_columns].min().reset_index()
         elif operation == 'count':
-            result = df_clean.groupby(groupby_columns)[numeric_column].count().reset_index()
+            result = grouped[numeric_columns].count().reset_index()
         
-        # Rename the result column to be more descriptive
-        result = result.rename(columns={numeric_column: f"{numeric_column}_{operation}"})
+        # Rename the result columns to be more descriptive
+        rename_dict = {}
+        for col in numeric_columns:
+            rename_dict[col] = f"{col}_{operation}"
+        result = result.rename(columns=rename_dict)
         
-        # Add a summary row if applicable
+        # Add summary rows if applicable
         if operation in ['sum', 'mean', 'count']:
             total_row = {}
             for col in groupby_columns:
                 total_row[col] = 'TOTAL'
             
-            if operation == 'sum':
-                total_row[f"{numeric_column}_{operation}"] = result[f"{numeric_column}_{operation}"].sum()
-            elif operation == 'mean':
-                total_row[f"{numeric_column}_{operation}"] = result[f"{numeric_column}_{operation}"].mean()
-            elif operation == 'count':
-                total_row[f"{numeric_column}_{operation}"] = result[f"{numeric_column}_{operation}"].sum()
+            for col in numeric_columns:
+                result_col = f"{col}_{operation}"
+                if operation == 'sum':
+                    total_row[result_col] = result[result_col].sum()
+                elif operation == 'mean':
+                    total_row[result_col] = result[result_col].mean()
+                elif operation == 'count':
+                    total_row[result_col] = result[result_col].sum()
             
             # Add total row
             result = pd.concat([result, pd.DataFrame([total_row])], ignore_index=True)
@@ -527,7 +564,6 @@ async def file_status(file_id: str, user_info: dict = Depends(verify_credentials
         "expires_at": file_info["expires_at"].isoformat()
     }
 
-
 def read_sap_bi_excel(file_path: str, file_type: str = "unknown"):
     """
     Read SAP BI Excel files by trying all sheets and finding the one with actual data
@@ -582,8 +618,6 @@ def read_sap_bi_excel(file_path: str, file_type: str = "unknown"):
         print(f"Error reading SAP BI Excel file {file_path}: {e}")
         return pd.DataFrame()
 
-# Replace your process_stock_distribution function with this corrected version
-
 def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, file_id: str) -> str:
     """Process stock distribution based on SAP BI warehouse and sales data"""
     try:
@@ -625,20 +659,6 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         new_warehouse_columns = {}
         
         if len(warehouse_columns) >= 12:
-            # Based on your structure:
-            # Col 0: Company Code
-            # Col 1: Company Code Name (skip)
-            # Col 2: Hierarchy Level 2 Code (skip) 
-            # Col 3: Department Name (this was wrongly mapped as nesto_mc before)
-            # Col 4: Hierarchy Level 1 Code (skip)
-            # Col 5: Hierarchy Level 1 Description (this was wrongly mapped as brand before)
-            # Col 6: Nesto MC Code (skip)
-            # Col 7: Nesto MC Description (correct nesto_mc)
-            # Col 8: Brand Code (skip)
-            # Col 9: Brand Description (correct brand)
-            # Col 10: Article Code (skip)
-            # Col 11: Article Description (correct article)
-            
             new_warehouse_columns = {
                 warehouse_columns[0]: 'Company Code',
                 warehouse_columns[1]: 'Company Code Name',
@@ -1183,8 +1203,6 @@ async def upload_file(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
-
-        
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)

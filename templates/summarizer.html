@@ -539,6 +539,35 @@
             }
         }
 
+        .selection-summary {
+            background: rgba(56, 161, 105, 0.1);
+            border: 2px solid #38a169;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+            color: #22543d;
+        }
+
+        .selection-summary h4 {
+            margin-bottom: 8px;
+            color: #22543d;
+        }
+
+        .selected-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .selected-item {
+            background: #38a169;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 16px;
@@ -627,19 +656,27 @@
             <div class="column-selector" id="groupbyColumns">
                 <!-- Will be populated after upload -->
             </div>
-            <button onclick="nextToNumericSelection()" disabled id="groupbyNextBtn">Next: Select Numeric Column</button>
+            <div class="selection-summary hidden" id="groupbySelection">
+                <h4>Selected Grouping Columns:</h4>
+                <div class="selected-items" id="groupbySelectedItems"></div>
+            </div>
+            <button onclick="nextToNumericSelection()" disabled id="groupbyNextBtn">Next: Select Numeric Columns</button>
             <div class="timer" id="timer1"></div>
         </div>
 
-        <!-- Step 3: Select Numeric Column and Operation -->
+        <!-- Step 3: Select Numeric Columns and Operation -->
         <div class="card hidden" id="numericCard">
-            <h2>Step 3: Select Numeric Column & Operation</h2>
+            <h2>Step 3: Select Numeric Columns & Operation</h2>
             
             <div class="form-group">
-                <div class="section-title">Select numeric column to analyze:</div>
-                <select id="numericColumn" name="numericColumn" required>
-                    <option value="">Select a numeric column...</option>
-                </select>
+                <div class="section-title">Select one or more numeric columns to analyze:</div>
+                <div class="column-selector" id="numericColumns">
+                    <!-- Will be populated after groupby selection -->
+                </div>
+                <div class="selection-summary hidden" id="numericSelection">
+                    <h4>Selected Numeric Columns:</h4>
+                    <div class="selected-items" id="numericSelectedItems"></div>
+                </div>
             </div>
 
             <div class="form-group">
@@ -655,7 +692,7 @@
                 </select>
             </div>
 
-            <button class="process-btn" onclick="processFile()">Generate Summary</button>
+            <button class="process-btn" onclick="processFile()" disabled id="processBtn">Generate Summary</button>
             <div class="timer" id="timer2"></div>
         </div>
 
@@ -680,6 +717,7 @@
         let timerInterval = null;
         let currentStep = 1;
         let selectedGroupbyColumns = [];
+        let selectedNumericColumns = [];
         let columnInfo = {};
 
         // Set up authentication on page load
@@ -838,15 +876,30 @@
         }
 
         function populateNumericColumns(columns, columnTypes) {
-            const select = document.getElementById('numericColumn');
-            select.innerHTML = '<option value="">Select a numeric column...</option>';
+            const container = document.getElementById('numericColumns');
+            container.innerHTML = '';
             
             columns.forEach(column => {
                 if (columnTypes[column] === 'numeric') {
-                    const option = document.createElement('option');
-                    option.value = column;
-                    option.textContent = column;
-                    select.appendChild(option);
+                    const div = document.createElement('div');
+                    div.className = 'column-item';
+                    div.innerHTML = `
+                        <input type="checkbox" id="numeric_${column}" value="${column}" onchange="updateNumericSelection()">
+                        <label for="numeric_${column}" style="cursor: pointer; margin: 0;">
+                            ${column}
+                            <div class="column-type">numeric</div>
+                        </label>
+                    `;
+                    
+                    div.onclick = function(e) {
+                        if (e.target.type !== 'checkbox') {
+                            const checkbox = div.querySelector('input[type="checkbox"]');
+                            checkbox.checked = !checkbox.checked;
+                            updateNumericSelection();
+                        }
+                    };
+                    
+                    container.appendChild(div);
                 }
             });
         }
@@ -869,10 +922,73 @@
                 }
             });
             
+            // Update selection display
+            updateSelectionDisplay('groupby', selectedGroupbyColumns);
+            
             // Enable/disable next button
             const nextBtn = document.getElementById('groupbyNextBtn');
             nextBtn.disabled = selectedGroupbyColumns.length === 0;
         }
+
+        function updateNumericSelection() {
+            selectedNumericColumns = [];
+            const checkboxes = document.querySelectorAll('#numericColumns input[type="checkbox"]:checked');
+            
+            checkboxes.forEach(checkbox => {
+                selectedNumericColumns.push(checkbox.value);
+                checkbox.closest('.column-item').classList.add('selected');
+            });
+            
+            // Remove selected class from unchecked items
+            const allItems = document.querySelectorAll('#numericColumns .column-item');
+            allItems.forEach(item => {
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                if (!checkbox.checked) {
+                    item.classList.remove('selected');
+                }
+            });
+            
+            // Update selection display
+            updateSelectionDisplay('numeric', selectedNumericColumns);
+            
+            // Enable/disable process button
+            updateProcessButton();
+        }
+
+        function updateSelectionDisplay(type, selectedColumns) {
+            const summaryEl = document.getElementById(`${type}Selection`);
+            const itemsEl = document.getElementById(`${type}SelectedItems`);
+            
+            if (selectedColumns.length > 0) {
+                summaryEl.classList.remove('hidden');
+                itemsEl.innerHTML = '';
+                selectedColumns.forEach(col => {
+                    const span = document.createElement('span');
+                    span.className = 'selected-item';
+                    span.textContent = col;
+                    itemsEl.appendChild(span);
+                });
+            } else {
+                summaryEl.classList.add('hidden');
+            }
+        }
+
+        function updateProcessButton() {
+            const processBtn = document.getElementById('processBtn');
+            const operation = document.getElementById('operation').value;
+            
+            const canProcess = selectedNumericColumns.length > 0 && operation;
+            processBtn.disabled = !canProcess;
+            
+            if (canProcess) {
+                processBtn.textContent = `Generate Summary (${selectedNumericColumns.length} columns)`;
+            } else {
+                processBtn.textContent = 'Select columns and operation';
+            }
+        }
+
+        // Add event listener for operation selection
+        document.getElementById('operation').addEventListener('change', updateProcessButton);
 
         function nextToNumericSelection() {
             if (selectedGroupbyColumns.length === 0) {
@@ -945,7 +1061,6 @@
         });
 
         async function processFile() {
-            const numericColumn = document.getElementById('numericColumn').value;
             const operation = document.getElementById('operation').value;
             
             if (selectedGroupbyColumns.length === 0) {
@@ -953,8 +1068,8 @@
                 return;
             }
             
-            if (!numericColumn) {
-                showMessage('Please select a numeric column.', 'error');
+            if (selectedNumericColumns.length === 0) {
+                showMessage('Please select at least one numeric column.', 'error');
                 return;
             }
             
@@ -977,7 +1092,7 @@
             
             const formData = new FormData();
             formData.append('groupby_columns', JSON.stringify(selectedGroupbyColumns));
-            formData.append('numeric_column', numericColumn);
+            formData.append('numeric_columns', JSON.stringify(selectedNumericColumns)); // Multiple columns
             formData.append('operation', operation);
             
             try {
@@ -994,7 +1109,7 @@
                     
                     updateStep(4);
                     
-                    showMessage(`Summary generated successfully! Grouped by: ${selectedGroupbyColumns.join(', ')}, ${operation} of ${numericColumn}`);
+                    showMessage(`Summary generated successfully! Grouped by: ${selectedGroupbyColumns.join(', ')}, ${operation} of ${selectedNumericColumns.join(', ')}`);
                 } else {
                     const error = await response.json();
                     showMessage('Error processing file: ' + error.detail, 'error');

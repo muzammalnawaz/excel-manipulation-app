@@ -6,5 +6,9 @@
   "user1": {
     "password": "user123",
     "role": "user"
+  },
+  "irshad123": {
+    "password": "nesto123",
+    "role": "user"
   }
 }
