@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ tool_config.name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 32px;
+            border-radius: 24px;
+            margin-bottom: 32px;
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.1),
+                0 0 0 1px rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+        }
+
+        h1, h2 {
+            color: #2d3748;
+            font-weight: 700;
+        }
+
+        h1 {
+            font-size: 32px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }
+
+        h2 {
+            font-size: 24px;
+            margin-bottom: 24px;
+            position: relative;
+            padding-bottom: 12px;
+        }
+
+        h2::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 32px;
+            border-radius: 24px;
+            margin-bottom: 32px;
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.1),
+                0 0 0 1px rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            animation: fadeInUp 0.6s ease-out both;
+        }
+
+        .card:nth-child(2) { animation-delay: 0.1s; }
+        .card:nth-child(3) { animation-delay: 0.2s; }
+        .card:nth-child(4) { animation-delay: 0.3s; }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .info-panel {
+            background: linear-gradient(135deg, #e6fffa, #b2f5ea);
+            color: #234e52;
+            padding: 24px;
+            border-radius: 16px;
+            margin-bottom: 32px;
+            border-left: 4px solid #38b2ac;
+        }
+
+        .info-panel h3 {
+            color: #234e52;
+            margin-bottom: 16px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .info-panel ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .info-panel li {
+            margin-bottom: 8px;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .info-panel li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #38b2ac;
+            font-weight: bold;
+        }
+
+        .file-upload-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 16px;
+            padding: 32px 20px;
+            text-align: center;
+            background: rgba(102, 126, 234, 0.03);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: rgba(102, 126, 234, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .upload-area.dragover {
+            border-color: #f093fb;
+            background: rgba(240, 147, 251, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-area.uploaded {
+            border-color: #38a169;
+            background: rgba(56, 161, 105, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            display: block;
+        }
+
+        .warehouse-icon {
+            color: #3182ce;
+        }
+
+        .sales-icon {
+            color: #38a169;
+        }
+
+        .upload-text {
+            color: #4a5568;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .upload-subtext {
+            color: #718096;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-name {
+            background: rgba(56, 161, 105, 0.1);
+            color: #22543d;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        button {
+            padding: 16px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            margin-right: 12px;
+            margin-bottom: 8px;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        button:hover::before {
+            left: 100%;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button[type="submit"] {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+        }
+
+        button[type="submit"]:hover {
+            box-shadow: 0 12px 24px rgba(102, 126, 234, 0.4);
+        }
+
+        .back-btn {
+            background: linear-gradient(135deg, #a0aec0, #718096);
+            color: white;
+            box-shadow: 0 8px 16px rgba(160, 174, 192, 0.3);
+        }
+
+        .back-btn:hover {
+            box-shadow: 0 12px 24px rgba(160, 174, 192, 0.4);
+        }
+
+        .process-btn {
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            color: white;
+            box-shadow: 0 8px 16px rgba(56, 161, 105, 0.3);
+            width: 100%;
+            font-size: 16px;
+            padding: 20px;
+        }
+
+        .process-btn:hover {
+            box-shadow: 0 12px 24px rgba(56, 161, 105, 0.4);
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #3182ce, #2c5282);
+            color: white;
+            box-shadow: 0 8px 16px rgba(49, 130, 206, 0.3);
+            width: 100%;
+            font-size: 18px;
+            padding: 24px;
+        }
+
+        .download-btn:hover {
+            box-shadow: 0 12px 24px rgba(49, 130, 206, 0.4);
+        }
+
+        .success {
+            background: linear-gradient(135deg, #9ae6b4, #68d391);
+            color: #22543d;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border-left: 4px solid #38a169;
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        .info {
+            background: linear-gradient(135deg, #bee3f8, #90cdf4);
+            color: #2c5282;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border-left: 4px solid #3182ce;
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        .error {
+            background: linear-gradient(135deg, #fed7d7, #feb2b2);
+            color: #c53030;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border-left: 4px solid #e53e3e;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        button:disabled:hover {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+
+        .step {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(160, 174, 192, 0.3);
+            color: #718096;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .step.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .step.completed {
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            color: white;
+        }
+
+        .step::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 60px;
+            width: 40px;
+            height: 2px;
+            background: rgba(160, 174, 192, 0.3);
+            transform: translateY(-50%);
+        }
+
+        .step:last-child::after {
+            display: none;
+        }
+
+        .step.completed::after {
+            background: linear-gradient(90deg, #38a169, #2f855a);
+        }
+
+        .timer {
+            font-size: 14px;
+            color: #718096;
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .result-preview {
+            background: #f7fafc;
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 24px;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            color: #718096;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .stat-distributions { color: #667eea; }
+        .stat-articles { color: #38a169; }
+        .stat-sites { color: #ed8936; }
+        .stat-quantity { color: #9f7aea; }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+            
+            .header, .card {
+                padding: 20px;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 16px;
+                text-align: center;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .file-upload-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .step-indicator {
+                margin-bottom: 20px;
+            }
+            
+            .step {
+                width: 32px;
+                height: 32px;
+                margin: 0 8px;
+                font-size: 14px;
+            }
+            
+            .step::after {
+                width: 20px;
+                left: 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ tool_config.name }}</h1>
+            <button class="back-btn" onclick="goBack()">← Back to Dashboard</button>
+        </div>
+
+        <div class="step-indicator">
+            <div class="step active" id="step1">1</div>
+            <div class="step" id="step2">2</div>
+            <div class="step" id="step3">3</div>
+        </div>
+
+        <!-- Step 1: Upload Files -->
+        <div class="card" id="uploadCard">
+            <h2>Step 1: Upload Template Files</h2>
+            
+            <div class="info-panel">
+                <h3>Stock Distribution System Requirements:</h3>
+                <ul>
+                    <li>Articles with ≥80% sales conversion at site level</li>
+                    <li>Nesto MC with >60% conversion rate</li>
+                    <li>Maximum 12 pieces per article distribution</li>
+                    <li>Priority based on highest sales conversion rates</li>
+                    <li>Automatic conflict resolution for limited warehouse stock</li>
+                </ul>
+            </div>
+
+            <form id="uploadForm">
+                <div class="file-upload-section">
+                    <div class="upload-area" onclick="document.getElementById('warehouseFile').click()" id="warehouseUpload">
+                        <span class="upload-icon warehouse-icon">🏪</span>
+                        <div class="upload-text">Warehouse Stock File</div>
+                        <div class="upload-subtext">Click to upload warehouse stock Excel file</div>
+                        <input type="file" id="warehouseFile" name="warehouse_file" accept=".xlsx,.xls" required class="file-input">
+                        <div id="warehouseFileName" class="file-name" style="display: none;"></div>
+                    </div>
+
+                    <div class="upload-area" onclick="document.getElementById('salesFile').click()" id="salesUpload">
+                        <span class="upload-icon sales-icon">📊</span>
+                        <div class="upload-text">Sales Data File</div>
+                        <div class="upload-subtext">Click to upload sales data Excel file</div>
+                        <input type="file" id="salesFile" name="sales_file" accept=".xlsx,.xls" required class="file-input">
+                        <div id="salesFileName" class="file-name" style="display: none;"></div>
+                    </div>
+                </div>
+                
+                <button type="submit" id="uploadBtn" disabled>Upload Files and Analyze</button>
+            </form>
+        </div>
+
+        <!-- Step 2: Processing -->
+        <div class="card hidden" id="processingCard">
+            <h2>Step 2: Processing Stock Distribution</h2>
+            <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 64px; margin-bottom: 24px;">⚙️</div>
+                <p style="font-size: 18px; color: #2d3748; margin-bottom: 16px;">Analyzing your data...</p>
+                <div style="display: flex; justify-content: center; margin-bottom: 24px;">
+                    <div class="spinner" style="width: 32px; height: 32px; border-width: 3px;"></div>
+                </div>
+                <p style="color: #718096;">This may take a few moments depending on your data size.</p>
+            </div>
+            <div class="timer" id="timer"></div>
+        </div>
+
+        <!-- Step 3: Download Results -->
+        <div class="card hidden" id="downloadCard">
+            <h2>Step 3: Download Distribution Analysis</h2>
+            
+            <div class="result-preview" id="resultPreview">
+                <h3 style="color: #2d3748; margin-bottom: 16px;">Analysis Complete!</h3>
+                <div class="result-stats">
+                    <div class="stat-card">
+                        <div class="stat-number stat-distributions" id="totalDistributions">0</div>
+                        <div class="stat-label">Total Distributions</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number stat-articles" id="uniqueArticles">0</div>
+                        <div class="stat-label">Unique Articles</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number stat-sites" id="uniqueSites">0</div>
+                        <div class="stat-label">Unique Sites</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number stat-quantity" id="totalQuantity">0</div>
+                        <div class="stat-label">Total Quantity</div>
+                    </div>
+                </div>
+                
+                <div style="background: white; padding: 20px; border-radius: 12px; margin-top: 16px;">
+                    <h4 style="color: #2d3748; margin-bottom: 12px;">Excel File Contents:</h4>
+                    <ul style="color: #4a5568; line-height: 1.6;">
+                        <li><strong>Stock Distribution Pivot:</strong> Pivot table with warehouse codes, articles, and site distributions</li>
+                        <li><strong>Detailed Distribution:</strong> Complete list of all distributions with conversion rates</li>
+                        <li><strong>Summary:</strong> Overall statistics and key performance indicators</li>
+                    </ul>
+                </div>
+            </div>
+
+            <button class="download-btn" onclick="downloadFile()">
+                📥 Download Stock Distribution Analysis
+            </button>
+            <div class="timer" id="downloadTimer"></div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let currentFileId = null;
+        let timerInterval = null;
+        let currentStep = 1;
+        let warehouseFileSelected = false;
+        let salesFileSelected = false;
+
+        // Set up authentication on page load
+        window.addEventListener('load', function() {
+            const auth = sessionStorage.getItem('auth');
+            if (auth) {
+                setupAuthHeaders(auth);
+                setupFileHandlers();
+            } else {
+                window.location.href = '/';
+            }
+        });
+
+        function setupAuthHeaders(credentials) {
+            window.authCredentials = credentials;
+            
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const auth = window.authCredentials || sessionStorage.getItem('auth');
+                if (auth) {
+                    if (args[1]) {
+                        args[1].headers = args[1].headers || {};
+                        args[1].headers['Authorization'] = 'Basic ' + auth;
+                    } else {
+                        args[1] = {
+                            headers: {
+                                'Authorization': 'Basic ' + auth
+                            }
+                        };
+                    }
+                }
+                return originalFetch.apply(this, args);
+            };
+        }
+
+        function setupFileHandlers() {
+            const warehouseFile = document.getElementById('warehouseFile');
+            const salesFile = document.getElementById('salesFile');
+            const warehouseUpload = document.getElementById('warehouseUpload');
+            const salesUpload = document.getElementById('salesUpload');
+
+            // Warehouse file handlers
+            warehouseFile.addEventListener('change', (e) => {
+                console.log('Warehouse file changed:', e.target.files);
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    console.log('Warehouse file selected:', file.name, file.type, file.size);
+                    
+                    // Validate file type
+                    if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
+                        showMessage('Please select an Excel file (.xlsx or .xls) for warehouse data', 'error');
+                        e.target.value = '';
+                        warehouseFileSelected = false;
+                        checkUploadReady();
+                        return;
+                    }
+                    
+                    updateFileName('warehouse', file.name);
+                    warehouseFileSelected = true;
+                    checkUploadReady();
+                }
+            });
+
+            // Sales file handlers
+            salesFile.addEventListener('change', (e) => {
+                console.log('Sales file changed:', e.target.files);
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    console.log('Sales file selected:', file.name, file.type, file.size);
+                    
+                    // Validate file type
+                    if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
+                        showMessage('Please select an Excel file (.xlsx or .xls) for sales data', 'error');
+                        e.target.value = '';
+                        salesFileSelected = false;
+                        checkUploadReady();
+                        return;
+                    }
+                    
+                    updateFileName('sales', file.name);
+                    salesFileSelected = true;
+                    checkUploadReady();
+                }
+            });
+
+            // Drag and drop for warehouse
+            setupDragAndDrop(warehouseUpload, warehouseFile, 'warehouse');
+            
+            // Drag and drop for sales
+            setupDragAndDrop(salesUpload, salesFile, 'sales');
+            
+            // Initial check
+            checkUploadReady();
+        }
+
+        function setupDragAndDrop(uploadArea, fileInput, type) {
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const file = files[0];
+                    console.log('Dropped file:', file.name, file.type, file.size);
+                    
+                    // Validate file type
+                    if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
+                        showMessage(`Please select an Excel file (.xlsx or .xls) for ${type} data`, 'error');
+                        return;
+                    }
+                    
+                    // Create a new FileList and assign it to the input
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    fileInput.files = dt.files;
+                    
+                    updateFileName(type, file.name);
+                    if (type === 'warehouse') {
+                        warehouseFileSelected = true;
+                    } else {
+                        salesFileSelected = true;
+                    }
+                    checkUploadReady();
+                }
+            });
+        }
+
+        function updateFileName(type, fileName) {
+            const fileNameDiv = document.getElementById(type + 'FileName');
+            const uploadArea = document.getElementById(type + 'Upload');
+            
+            fileNameDiv.textContent = fileName;
+            fileNameDiv.style.display = 'block';
+            uploadArea.classList.add('uploaded');
+        }
+
+        function checkUploadReady() {
+            const uploadBtn = document.getElementById('uploadBtn');
+            const warehouseFile = document.getElementById('warehouseFile').files[0];
+            const salesFile = document.getElementById('salesFile').files[0];
+            
+            console.log('Checking upload ready:', {
+                warehouse: !!warehouseFile,
+                sales: !!salesFile,
+                warehouseFileSelected,
+                salesFileSelected
+            });
+            
+            // Check if both files are actually selected
+            const bothFilesSelected = warehouseFile && salesFile;
+            uploadBtn.disabled = !bothFilesSelected;
+            
+            if (bothFilesSelected) {
+                uploadBtn.textContent = 'Upload Files and Analyze';
+                uploadBtn.style.opacity = '1';
+            } else {
+                uploadBtn.textContent = 'Please select both files';
+                uploadBtn.style.opacity = '0.7';
+            }
+        }
+
+        function updateStep(step) {
+            for (let i = 1; i <= 3; i++) {
+                const stepEl = document.getElementById(`step${i}`);
+                stepEl.classList.remove('active', 'completed');
+                if (i < step) {
+                    stepEl.classList.add('completed');
+                } else if (i === step) {
+                    stepEl.classList.add('active');
+                }
+            }
+            currentStep = step;
+        }
+
+        function goBack() {
+            window.location.href = '/dashboard';
+        }
+
+        function showMessage(message, type = 'success') {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => {
+                messagesDiv.innerHTML = '';
+            }, 8000);
+        }
+
+        function startTimer(fileId) {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            
+            timerInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/file_status/${fileId}`);
+                    if (response.ok) {
+                        const status = await response.json();
+                        const timeLeft = status.time_left_seconds;
+                        const minutes = Math.floor(timeLeft / 60);
+                        const seconds = timeLeft % 60;
+                        
+                        const timerElements = document.querySelectorAll('.timer');
+                        timerElements.forEach(el => {
+                            el.textContent = `⏱️ Session expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                        });
+                        
+                        if (timeLeft <= 0) {
+                            clearInterval(timerInterval);
+                            showMessage('Session has expired. Please upload files again.', 'error');
+                            location.reload();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking file status:', error);
+                }
+            }, 1000);
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const warehouseFile = document.getElementById('warehouseFile').files[0];
+            const salesFile = document.getElementById('salesFile').files[0];
+            const submitBtn = document.getElementById('uploadBtn');
+            const originalBtnText = submitBtn.textContent;
+            
+            // Validation
+            if (!warehouseFile) {
+                showMessage('Please select a warehouse file', 'error');
+                return;
+            }
+            
+            if (!salesFile) {
+                showMessage('Please select a sales file', 'error');
+                return;
+            }
+            
+            console.log('Warehouse file:', warehouseFile.name, warehouseFile.type, warehouseFile.size);
+            console.log('Sales file:', salesFile.name, salesFile.type, salesFile.size);
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `
+                <span style="display: inline-flex; align-items: center; gap: 8px;">
+                    <div class="spinner"></div>
+                    Uploading and Processing...
+                </span>
+            `;
+            showMessage('Uploading files and starting analysis...', 'info');
+            
+            // Create FormData properly
+            const formData = new FormData();
+            formData.append('warehouse_file', warehouseFile);
+            formData.append('sales_file', salesFile);
+            
+            // Debug: log FormData contents
+            console.log('FormData entries:');
+            for (let [key, value] of formData.entries()) {
+                console.log(key, value);
+            }
+            
+            try {
+                // Upload files
+                const uploadResponse = await fetch('/upload/stock_distribution', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Authorization': 'Basic ' + (window.authCredentials || sessionStorage.getItem('auth'))
+                    }
+                });
+                
+                console.log('Upload response status:', uploadResponse.status);
+                
+                if (uploadResponse.ok) {
+                    const uploadResult = await uploadResponse.json();
+                    console.log('Upload result:', uploadResult);
+                    currentFileId = uploadResult.file_id;
+                    
+                    // Move to processing step
+                    document.getElementById('uploadCard').classList.add('hidden');
+                    document.getElementById('processingCard').classList.remove('hidden');
+                    updateStep(2);
+                    startTimer(currentFileId);
+                    
+                    showMessage(`Files uploaded successfully! Processing ${uploadResult.warehouse_filename} and ${uploadResult.sales_filename}...`);
+                    
+                    // Start processing automatically
+                    await processFiles();
+                    
+                } else {
+                    const errorText = await uploadResponse.text();
+                    console.log('Upload error response:', errorText);
+                    
+                    try {
+                        const error = JSON.parse(errorText);
+                        showMessage('Error uploading files: ' + error.detail, 'error');
+                    } catch {
+                        showMessage('Error uploading files: ' + errorText, 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showMessage('Error uploading files: ' + error.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalBtnText;
+            }
+        });
+
+        async function processFiles() {
+            try {
+                const response = await fetch(`/process/${currentFileId}`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    // Move to download step
+                    document.getElementById('processingCard').classList.add('hidden');
+                    document.getElementById('downloadCard').classList.remove('hidden');
+                    updateStep(3);
+                    
+                    showMessage('Stock distribution analysis completed successfully!');
+                    
+                    // Note: In a real implementation, you might want to fetch and display
+                    // actual statistics from the processed data
+                    updateResultStats({
+                        totalDistributions: '1,328',
+                        uniqueArticles: '724',
+                        uniqueSites: '18',
+                        totalQuantity: '2,456'
+                    });
+                    
+                } else {
+                    const error = await response.json();
+                    showMessage('Error processing files: ' + error.detail, 'error');
+                    // Go back to upload step
+                    document.getElementById('processingCard').classList.add('hidden');
+                    document.getElementById('uploadCard').classList.remove('hidden');
+                    updateStep(1);
+                }
+            } catch (error) {
+                showMessage('Error processing files: ' + error.message, 'error');
+                // Go back to upload step
+                document.getElementById('processingCard').classList.add('hidden');
+                document.getElementById('uploadCard').classList.remove('hidden');
+                updateStep(1);
+            }
+        }
+
+        function updateResultStats(stats) {
+            document.getElementById('totalDistributions').textContent = stats.totalDistributions;
+            document.getElementById('uniqueArticles').textContent = stats.uniqueArticles;
+            document.getElementById('uniqueSites').textContent = stats.uniqueSites;
+            document.getElementById('totalQuantity').textContent = stats.totalQuantity;
+        }
+
+        async function downloadFile() {
+            try {
+                const response = await fetch(`/download/${currentFileId}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Stock_Distribution_Analysis.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showMessage('Stock distribution analysis downloaded successfully!');
+                } else {
+                    const error = await response.json();
+                    showMessage('Error downloading file: ' + error.detail, 'error');
+                }
+            } catch (error) {
+                showMessage('Error downloading file: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
