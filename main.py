@@ -8,6 +8,7 @@ import pandas as pd
 import os
 import uuid
 import asyncio
+import glob
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import json
@@ -38,7 +39,7 @@ os.makedirs("uploads", exist_ok=True)
 os.makedirs("downloads", exist_ok=True)
 os.makedirs("templates", exist_ok=True)
 os.makedirs("static", exist_ok=True)
-os.makedirs("data", exist_ok=True)  # New persistent data directory
+os.makedirs("data", exist_ok=True)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -59,7 +60,6 @@ def load_users():
                 return users_data
         except (json.JSONDecodeError, IOError) as e:
             print(f"Error loading users file: {e}")
-            # If file is corrupted, create backup and recreate
             backup_file = f"{USERS_FILE}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             try:
                 if Path(USERS_FILE).exists():
@@ -126,7 +126,6 @@ TOOLS_CONFIG = {
         "description": "Analyze sales conversion rates and distribute warehouse stock to shops based on performance metrics",
         "processor": "process_stock_distribution"
     }
-    # Future tools can be added here
 }
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
@@ -155,35 +154,189 @@ def admin_required(user_info: dict = Depends(verify_credentials)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return user_info
 
+def get_file_age_minutes(file_path: str) -> float:
+    """Get file age in minutes"""
+    try:
+        if not os.path.exists(file_path):
+            return float('inf')  # File doesn't exist, consider it very old
+        
+        file_time = os.path.getmtime(file_path)
+        current_time = datetime.now().timestamp()
+        age_seconds = current_time - file_time
+        return age_seconds / 60.0  # Convert to minutes
+    except Exception as e:
+        print(f"Error getting file age for {file_path}: {e}")
+        return float('inf')
+
+def cleanup_old_files_by_pattern(directory: str, pattern: str, max_age_minutes: int) -> int:
+    """Clean up files matching pattern older than max_age_minutes"""
+    cleaned_count = 0
+    try:
+        full_pattern = os.path.join(directory, pattern)
+        files = glob.glob(full_pattern)
+        
+        for file_path in files:
+            try:
+                file_age = get_file_age_minutes(file_path)
+                if file_age > max_age_minutes:
+                    os.remove(file_path)
+                    print(f"Cleaned up old file: {file_path} (age: {file_age:.1f} minutes)")
+                    cleaned_count += 1
+            except Exception as e:
+                print(f"Error removing file {file_path}: {e}")
+                
+    except Exception as e:
+        print(f"Error during pattern cleanup in {directory} with pattern {pattern}: {e}")
+    
+    return cleaned_count
+
 async def cleanup_expired_files():
-    """Background task to cleanup expired files"""
+    """Enhanced background task to cleanup expired files"""
+    print("🧹 File cleanup system started")
+    
     while True:
-        current_time = datetime.now()
-        expired_files = []
+        try:
+            current_time = datetime.now()
+            expired_files = []
+            total_cleaned = 0
+            
+            # 1. Clean up expired files from file_storage tracking
+            for file_id, file_info in list(file_storage.items()):
+                if current_time > file_info["expires_at"]:
+                    expired_files.append(file_id)
+            
+            # Remove tracked expired files
+            for file_id in expired_files:
+                file_info = file_storage[file_id]
+                
+                # Remove all associated physical files
+                files_to_remove = []
+                
+                # Add original files
+                if "original_path" in file_info:
+                    files_to_remove.append(file_info["original_path"])
+                
+                # Add stock distribution files (dual file upload)
+                if "warehouse_path" in file_info:
+                    files_to_remove.append(file_info["warehouse_path"])
+                if "sales_path" in file_info:
+                    files_to_remove.append(file_info["sales_path"])
+                
+                # Add processed files
+                if "processed_path" in file_info:
+                    files_to_remove.append(file_info["processed_path"])
+                
+                # Remove all associated files
+                for file_path in files_to_remove:
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                            print(f"🗑️  Removed tracked expired file: {file_path}")
+                            total_cleaned += 1
+                        except Exception as e:
+                            print(f"❌ Error removing tracked file {file_path}: {e}")
+                
+                # Remove from tracking
+                del file_storage[file_id]
+                print(f"📋 Removed file_id {file_id} from tracking")
+            
+            # 2. Clean up orphaned files (files not in tracking system)
+            print("🔍 Scanning for orphaned files...")
+            
+            # Clean uploads directory - files older than 15 minutes
+            uploads_cleaned = cleanup_old_files_by_pattern("uploads", "*", 15)
+            total_cleaned += uploads_cleaned
+            
+            # Clean downloads directory - files older than 30 minutes  
+            downloads_cleaned = cleanup_old_files_by_pattern("downloads", "*", 30)
+            total_cleaned += downloads_cleaned
+            
+            # 3. Clean up temporary and backup files
+            # Clean old backup files in data directory (older than 7 days)
+            backup_cleaned = cleanup_old_files_by_pattern("data", "*.backup*", 7 * 24 * 60)
+            total_cleaned += backup_cleaned
+            
+            # Clean any .tmp files older than 5 minutes
+            tmp_cleaned = cleanup_old_files_by_pattern("uploads", "*.tmp", 5)
+            tmp_cleaned += cleanup_old_files_by_pattern("downloads", "*.tmp", 5)
+            total_cleaned += tmp_cleaned
+            
+            # 4. Log cleanup summary
+            if total_cleaned > 0:
+                print(f"🧹 Cleanup completed: {total_cleaned} files removed")
+                print(f"   - Tracked expired: {len(expired_files)} file sets")
+                print(f"   - Orphaned uploads: {uploads_cleaned}")
+                print(f"   - Orphaned downloads: {downloads_cleaned}")
+                print(f"   - Old backups: {backup_cleaned}")
+                print(f"   - Temp files: {tmp_cleaned}")
+            
+            # 5. Log current storage status
+            if len(file_storage) > 0:
+                print(f"📊 Active file tracking: {len(file_storage)} file sets")
+                
+                # Show upcoming expirations
+                upcoming_expirations = []
+                for file_id, file_info in file_storage.items():
+                    time_left = file_info["expires_at"] - current_time
+                    if time_left.total_seconds() > 0:
+                        upcoming_expirations.append({
+                            'file_id': file_id[:8] + '...',
+                            'minutes_left': int(time_left.total_seconds() / 60),
+                            'user': file_info.get('user', 'unknown'),
+                            'tool': file_info.get('tool_id', 'unknown')
+                        })
+                
+                if upcoming_expirations:
+                    upcoming_expirations.sort(key=lambda x: x['minutes_left'])
+                    print("⏰ Upcoming expirations:")
+                    for exp in upcoming_expirations[:3]:  # Show next 3
+                        print(f"   - {exp['file_id']} ({exp['tool']}) by {exp['user']}: {exp['minutes_left']}min left")
+            
+        except Exception as e:
+            print(f"❌ Error during cleanup cycle: {e}")
+            import traceback
+            traceback.print_exc()
         
-        for file_id, file_info in file_storage.items():
-            if current_time > file_info["expires_at"]:
-                expired_files.append(file_id)
-        
-        for file_id in expired_files:
-            file_info = file_storage[file_id]
-            # Remove physical files
-            for file_path in [file_info.get("original_path"), file_info.get("processed_path")]:
-                if file_path and os.path.exists(file_path):
-                    try:
-                        os.remove(file_path)
-                    except Exception as e:
-                        print(f"Error removing file {file_path}: {e}")
-            # Remove from storage
-            del file_storage[file_id]
-        
-        await asyncio.sleep(60)  # Check every minute
+        # Run cleanup every 2 minutes for more responsive cleanup
+        await asyncio.sleep(120)
 
 @app.on_event("startup")
 async def startup_event():
     # Start cleanup task
     asyncio.create_task(cleanup_expired_files())
-    print("Application started successfully")
+    print("✅ Application started successfully with enhanced file cleanup")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up on application shutdown"""
+    print("🛑 Application shutting down, performing final cleanup...")
+    
+    try:
+        # Clean up all tracked files
+        for file_id, file_info in file_storage.items():
+            files_to_remove = []
+            
+            if "original_path" in file_info:
+                files_to_remove.append(file_info["original_path"])
+            if "warehouse_path" in file_info:
+                files_to_remove.append(file_info["warehouse_path"])
+            if "sales_path" in file_info:
+                files_to_remove.append(file_info["sales_path"])
+            if "processed_path" in file_info:
+                files_to_remove.append(file_info["processed_path"])
+            
+            for file_path in files_to_remove:
+                if file_path and os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        print(f"🗑️  Shutdown cleanup: {file_path}")
+                    except Exception as e:
+                        print(f"❌ Error during shutdown cleanup: {e}")
+        
+        print("✅ Shutdown cleanup completed")
+        
+    except Exception as e:
+        print(f"❌ Error during shutdown cleanup: {e}")
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -221,7 +374,6 @@ async def update_user(
     if username not in users_db:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Prevent admin from changing their own role or deleting themselves
     if username == "admin" and user_info["username"] == "admin":
         if role != "admin":
             raise HTTPException(status_code=400, detail="Cannot change admin role")
@@ -239,11 +391,9 @@ async def delete_user(
     if username not in users_db:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Prevent deletion of admin user
     if username == "admin":
         raise HTTPException(status_code=400, detail="Cannot delete admin user")
     
-    # Prevent admin from deleting themselves if they're the only admin
     if username == user_info["username"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     
@@ -263,6 +413,84 @@ async def user_dashboard(request: Request, user_info: dict = Depends(verify_cred
 async def get_user_role(user_info: dict = Depends(verify_credentials)):
     return {"role": user_info["role"], "username": user_info["username"]}
 
+@app.get("/admin/system_status")
+async def get_system_status(user_info: dict = Depends(admin_required)):
+    """Get system status including file cleanup info"""
+    try:
+        current_time = datetime.now()
+        
+        # Count files in directories
+        uploads_count = len([f for f in os.listdir("uploads") if os.path.isfile(os.path.join("uploads", f))])
+        downloads_count = len([f for f in os.listdir("downloads") if os.path.isfile(os.path.join("downloads", f))])
+        
+        # Active file tracking info
+        active_files = len(file_storage)
+        active_users = len(set(info.get('user', 'unknown') for info in file_storage.values()))
+        
+        # Calculate total disk usage
+        def get_dir_size(directory):
+            total = 0
+            try:
+                for dirpath, dirnames, filenames in os.walk(directory):
+                    for filename in filenames:
+                        filepath = os.path.join(dirpath, filename)
+                        total += os.path.getsize(filepath)
+            except Exception:
+                pass
+            return total
+        
+        uploads_size = get_dir_size("uploads")
+        downloads_size = get_dir_size("downloads")
+        
+        # Upcoming expirations
+        upcoming = []
+        for file_id, file_info in file_storage.items():
+            time_left = file_info["expires_at"] - current_time
+            if time_left.total_seconds() > 0:
+                upcoming.append({
+                    'file_id': file_id[:8] + '...',
+                    'minutes_left': int(time_left.total_seconds() / 60),
+                    'user': file_info.get('user', 'unknown'),
+                    'tool': file_info.get('tool_id', 'unknown')
+                })
+        
+        upcoming.sort(key=lambda x: x['minutes_left'])
+        
+        return {
+            "status": "healthy",
+            "timestamp": current_time.isoformat(),
+            "file_system": {
+                "uploads": {
+                    "count": uploads_count,
+                    "size_bytes": uploads_size,
+                    "size_mb": round(uploads_size / 1024 / 1024, 2)
+                },
+                "downloads": {
+                    "count": downloads_count,
+                    "size_bytes": downloads_size,
+                    "size_mb": round(downloads_size / 1024 / 1024, 2)
+                }
+            },
+            "active_sessions": {
+                "file_sets": active_files,
+                "active_users": active_users,
+                "upcoming_expirations": upcoming[:5]
+            },
+            "cleanup_system": {
+                "enabled": True,
+                "check_interval_seconds": 120,
+                "upload_retention_minutes": 15,
+                "download_retention_minutes": 30
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
 @app.get("/tool/{tool_id}", response_class=HTMLResponse)
 async def tool_page(request: Request, tool_id: str, user_info: dict = Depends(verify_credentials)):
     if tool_id not in TOOLS_CONFIG:
@@ -270,7 +498,6 @@ async def tool_page(request: Request, tool_id: str, user_info: dict = Depends(ve
     
     tool_config = TOOLS_CONFIG[tool_id]
     
-    # Use different templates based on tool
     if tool_id == "data_summarizer":
         template_name = "summarizer.html"
     elif tool_id == "stock_distribution":
@@ -285,6 +512,9 @@ async def tool_page(request: Request, tool_id: str, user_info: dict = Depends(ve
         "user_info": user_info
     })
 
+# [Continue with the rest of the functions - process_file, split_excel_by_column, summarize_data, etc.]
+# The remaining functions stay the same as in the previous version...
+
 @app.post("/process/{file_id}")
 async def process_file(
     file_id: str,
@@ -296,21 +526,17 @@ async def process_file(
     
     file_info = file_storage[file_id]
     
-    # Check if file belongs to user
     if file_info["user"] != user_info["username"]:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Check if file expired
     if datetime.now() > file_info["expires_at"]:
         raise HTTPException(status_code=410, detail="File has expired")
     
     try:
-        # Process the file based on tool
         tool_id = file_info["tool_id"]
         processor_name = TOOLS_CONFIG[tool_id]["processor"]
         
         if processor_name == "process_stock_distribution":
-            # For stock distribution, we process both files automatically
             processed_path = process_stock_distribution(
                 file_info["warehouse_path"],
                 file_info["sales_path"],
@@ -328,23 +554,22 @@ async def process_file(
         elif processor_name == "summarize_data":
             form = await request.form()
             groupby_columns = form.get("groupby_columns")
-            numeric_columns = form.get("numeric_columns")  # Changed to support multiple columns
+            numeric_columns = form.get("numeric_columns")
             operation = form.get("operation")
             
             if not groupby_columns or not numeric_columns or not operation:
                 raise HTTPException(status_code=400, detail="All fields are required for summarization")
             
-            # Parse columns from JSON string
             try:
                 groupby_cols = json.loads(groupby_columns)
-                numeric_cols = json.loads(numeric_columns)  # Parse multiple numeric columns
+                numeric_cols = json.loads(numeric_columns)
             except json.JSONDecodeError:
                 raise HTTPException(status_code=400, detail="Invalid columns format")
             
             processed_path = summarize_data(
                 file_info["original_path"], 
                 groupby_cols, 
-                numeric_cols,  # Pass multiple columns
+                numeric_cols,
                 operation, 
                 file_id
             )
@@ -352,51 +577,40 @@ async def process_file(
         else:
             raise HTTPException(status_code=400, detail="Unknown processor")
         
-        # Update file info
         file_storage[file_id]["processed"] = True
         file_storage[file_id]["processed_path"] = processed_path
         
         return {"message": "File processed successfully", "download_ready": True}
     
     except Exception as e:
-        print(f"Processing error: {str(e)}")  # Add logging
+        print(f"Processing error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 def split_excel_by_column(file_path: str, column_name: str, file_id: str) -> str:
     """Split Excel file by column values into multiple sheets"""
     try:
-        # Read the Excel file
         df = pd.read_excel(file_path, sheet_name=0)
         
-        # Check if column exists and has data
         if column_name not in df.columns:
             raise ValueError(f"Column '{column_name}' not found in the file")
         
         if df[column_name].isna().all():
             raise ValueError(f"Column '{column_name}' contains no data")
         
-        # Group by the specified column
         grouped_data = df.groupby(column_name)
-        
-        # Create output file path
         output_path = f"downloads/{file_id}_processed.xlsx"
         
-        # Create Excel writer
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             for group_name, group_data in grouped_data:
-                # Clean sheet name (Excel sheet names have restrictions)
-                sheet_name = str(group_name)[:31]  # Max 31 characters
+                sheet_name = str(group_name)[:31]
                 
-                # Remove invalid characters for Excel sheet names
                 invalid_chars = ['/', '\\', '*', '?', '[', ']', ':']
                 for char in invalid_chars:
                     sheet_name = sheet_name.replace(char, '_')
                 
-                # Ensure sheet name is not empty
                 if not sheet_name.strip():
                     sheet_name = f"Sheet_{len(writer.sheets) + 1}"
                 
-                # Write to sheet
                 group_data.to_excel(writer, sheet_name=sheet_name, index=False)
         
         return output_path
@@ -407,37 +621,29 @@ def split_excel_by_column(file_path: str, column_name: str, file_id: str) -> str
 def summarize_data(file_path: str, groupby_columns: List[str], numeric_columns: List[str], operation: str, file_id: str) -> str:
     """Summarize data by grouping and applying aggregation operations to multiple numeric columns"""
     try:
-        # Read the Excel file
         df = pd.read_excel(file_path, sheet_name=0)
         
-        # Validate groupby columns
         for col in groupby_columns:
             if col not in df.columns:
                 raise ValueError(f"Groupby column '{col}' not found in the file")
         
-        # Validate numeric columns
         for col in numeric_columns:
             if col not in df.columns:
                 raise ValueError(f"Numeric column '{col}' not found in the file")
-            # Check if numeric column is actually numeric
             if not pd.api.types.is_numeric_dtype(df[col]):
                 raise ValueError(f"Column '{col}' is not numeric")
         
-        # Validate operation
         valid_operations = ['sum', 'mean', 'median', 'max', 'min', 'count']
         if operation not in valid_operations:
             raise ValueError(f"Operation '{operation}' is not valid. Choose from: {', '.join(valid_operations)}")
         
-        # Remove rows with NaN in groupby columns or numeric columns
         df_clean = df.dropna(subset=groupby_columns + numeric_columns)
         
         if df_clean.empty:
             raise ValueError("No valid data remaining after removing missing values")
         
-        # Group by the specified columns and apply the operation to all numeric columns
         grouped = df_clean.groupby(groupby_columns)
         
-        # Apply operation to all numeric columns
         if operation == 'sum':
             result = grouped[numeric_columns].sum().reset_index()
         elif operation == 'mean':
@@ -451,13 +657,11 @@ def summarize_data(file_path: str, groupby_columns: List[str], numeric_columns: 
         elif operation == 'count':
             result = grouped[numeric_columns].count().reset_index()
         
-        # Rename the result columns to be more descriptive
         rename_dict = {}
         for col in numeric_columns:
             rename_dict[col] = f"{col}_{operation}"
         result = result.rename(columns=rename_dict)
         
-        # Add summary rows if applicable
         if operation in ['sum', 'mean', 'count']:
             total_row = {}
             for col in groupby_columns:
@@ -472,21 +676,16 @@ def summarize_data(file_path: str, groupby_columns: List[str], numeric_columns: 
                 elif operation == 'count':
                     total_row[result_col] = result[result_col].sum()
             
-            # Add total row
             result = pd.concat([result, pd.DataFrame([total_row])], ignore_index=True)
         
-        # Create output file path
         output_path = f"downloads/{file_id}_summarized.xlsx"
         
-        # Save to Excel with formatting
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             result.to_excel(writer, sheet_name='Summary', index=False)
             
-            # Get the workbook and worksheet
             workbook = writer.book
             worksheet = writer.sheets['Summary']
             
-            # Auto-adjust column widths
             for column in worksheet.columns:
                 max_length = 0
                 column_letter = column[0].column_letter
@@ -511,11 +710,9 @@ async def download_file(file_id: str, user_info: dict = Depends(verify_credentia
     
     file_info = file_storage[file_id]
     
-    # Check if file belongs to user
     if file_info["user"] != user_info["username"]:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Check if file expired
     if datetime.now() > file_info["expires_at"]:
         raise HTTPException(status_code=410, detail="File has expired")
     
@@ -526,7 +723,6 @@ async def download_file(file_id: str, user_info: dict = Depends(verify_credentia
     if not os.path.exists(processed_path):
         raise HTTPException(status_code=404, detail="Processed file not found")
     
-    # Generate download filename based on tool
     if file_info["tool_id"] == "stock_distribution":
         download_filename = "Stock_Distribution_Analysis.xlsx"
     elif file_info["tool_id"] == "data_summarizer":
@@ -551,7 +747,6 @@ async def file_status(file_id: str, user_info: dict = Depends(verify_credentials
     
     file_info = file_storage[file_id]
     
-    # Check if file belongs to user
     if file_info["user"] != user_info["username"]:
         raise HTTPException(status_code=403, detail="Access denied")
     
@@ -565,14 +760,10 @@ async def file_status(file_id: str, user_info: dict = Depends(verify_credentials
     }
 
 def read_sap_bi_excel(file_path: str, file_type: str = "unknown"):
-    """
-    Read SAP BI Excel files by trying all sheets and finding the one with actual data
-    Similar to your glob approach but for single files
-    """
+    """Read SAP BI Excel files by trying all sheets and finding the one with actual data"""
     try:
         print(f"Reading SAP BI Excel file: {file_path} (type: {file_type})")
         
-        # Read all sheets
         excel_data = pd.read_excel(file_path, sheet_name=None)
         print(f"Found sheets: {list(excel_data.keys())}")
         
@@ -581,7 +772,6 @@ def read_sap_bi_excel(file_path: str, file_type: str = "unknown"):
         for sheet_name, sheet_df in excel_data.items():
             print(f"Checking sheet '{sheet_name}': shape {sheet_df.shape}")
             
-            # Skip obvious hidden/system sheets
             if sheet_name.startswith('_com.sap.ip.bi.xl.hiddensheet'):
                 print(f"  Skipping hidden sheet: {sheet_name}")
                 continue
@@ -590,11 +780,9 @@ def read_sap_bi_excel(file_path: str, file_type: str = "unknown"):
                 print(f"  Skipping system sheet: {sheet_name}")
                 continue
             
-            # Check if sheet has actual data
             if not sheet_df.empty and sheet_df.shape[0] > 0 and sheet_df.shape[1] > 0:
-                # Check if it's not just headers or metadata
                 non_null_rows = sheet_df.dropna(how='all').shape[0]
-                if non_null_rows > 1:  # More than just header
+                if non_null_rows > 1:
                     print(f"  Valid data sheet found: {sheet_name} with {non_null_rows} rows")
                     sheet_df['source_file'] = file_path
                     sheet_df['source_sheet'] = sheet_name
@@ -605,7 +793,6 @@ def read_sap_bi_excel(file_path: str, file_type: str = "unknown"):
                 print(f"  Sheet {sheet_name} is empty")
         
         if valid_dfs:
-            # Combine all valid sheets (usually there's just one data sheet)
             combined_df = pd.concat(valid_dfs, ignore_index=True)
             print(f"Combined data shape: {combined_df.shape}")
             print(f"Combined data columns: {list(combined_df.columns)}")
@@ -627,7 +814,6 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         
         print(f"Processing stock distribution for file ID: {file_id}")
         
-        # Read SAP BI files using the same function as upload
         print("Reading warehouse data from SAP BI file...")
         warehouse_df = read_sap_bi_excel(warehouse_file_path, "warehouse")
         
@@ -652,8 +838,6 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         print(f"Original warehouse columns: {list(warehouse_df.columns)}")
         print(f"Original sales columns: {list(sales_df.columns)}")
         
-        # STEP 1: RENAME COLUMNS CORRECTLY FIRST
-        
         # WAREHOUSE DATA COLUMN RENAMING
         warehouse_columns = list(warehouse_df.columns)
         new_warehouse_columns = {}
@@ -674,15 +858,13 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
                 warehouse_columns[11]: 'Article Description'
             }
             
-            # Keep existing column names for data columns
             for i in range(12, len(warehouse_columns)):
                 new_warehouse_columns[warehouse_columns[i]] = warehouse_columns[i]
         
-        # Apply warehouse column renaming
         warehouse_renamed = warehouse_df.rename(columns=new_warehouse_columns)
         print(f"Warehouse columns after renaming: {list(warehouse_renamed.columns)}")
         
-        # SALES DATA COLUMN RENAMING (same structure expected)
+        # SALES DATA COLUMN RENAMING
         sales_columns = list(sales_df.columns)
         new_sales_columns = {}
         
@@ -702,15 +884,12 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
                 sales_columns[11]: 'Article Description'
             }
             
-            # Keep existing column names for data columns
             for i in range(12, len(sales_columns)):
                 new_sales_columns[sales_columns[i]] = sales_columns[i]
         
-        # Apply sales column renaming
         sales_renamed = sales_df.rename(columns=new_sales_columns)
         print(f"Sales columns after renaming: {list(sales_renamed.columns)}")
         
-        # STEP 2: CLEAN DATA BY DROPPING ROWS WHERE ARTICLE DESCRIPTION IS NULL
         print("Cleaning data by removing rows with null Article Description...")
         
         warehouse_clean = warehouse_renamed.dropna(subset=['Article Description'])
@@ -718,22 +897,18 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         
         print(f"After removing null Article Description - Warehouse: {warehouse_clean.shape}, Sales: {sales_clean.shape}")
         
-        # STEP 3: CREATE WORKING DATASET WITH CORRECT COLUMNS
-        
-        # Warehouse working dataset
+        # Create working datasets
         warehouse_processed = pd.DataFrame()
         warehouse_processed['company_code'] = warehouse_clean['Company Code']
         warehouse_processed['department'] = warehouse_clean['Department Name']
         warehouse_processed['hierarchy_level1'] = warehouse_clean['Hierarchy Level 1 Description']
-        warehouse_processed['nesto_mc'] = warehouse_clean['Nesto MC Description']  # CORRECT
-        warehouse_processed['brand'] = warehouse_clean['Brand Description']        # CORRECT
-        # Keep Article Code and Article Description as separate columns
+        warehouse_processed['nesto_mc'] = warehouse_clean['Nesto MC Description']
+        warehouse_processed['brand'] = warehouse_clean['Brand Description']
         warehouse_processed['article_code'] = warehouse_clean['Article Code']
         warehouse_processed['article_description'] = warehouse_clean['Article Description']
-        # Create combined key for lookups
         warehouse_processed['article_key'] = warehouse_clean['Article Code'].astype(str)
         
-        # Find and add quantity columns
+        # Find quantity columns
         for col in warehouse_clean.columns:
             col_str = str(col).lower()
             if 'total' in col_str and 'quantity' in col_str:
@@ -749,15 +924,13 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         sales_processed['company_code'] = sales_clean['Company Code']
         sales_processed['department'] = sales_clean['Department Name']
         sales_processed['category'] = sales_clean['Hierarchy Level 1 Description']
-        sales_processed['nesto_mc'] = sales_clean['Nesto MC Description']    # CORRECT
-        sales_processed['brand'] = sales_clean['Brand Description']          # CORRECT  
-        # Keep Article Code and Article Description as separate columns
+        sales_processed['nesto_mc'] = sales_clean['Nesto MC Description']
+        sales_processed['brand'] = sales_clean['Brand Description']
         sales_processed['article_code'] = sales_clean['Article Code']
         sales_processed['article_description'] = sales_clean['Article Description']
-        # Create combined key for lookups
         sales_processed['article_key'] = sales_clean['Article Code'].astype(str)
         
-        # Find and add stock/sales quantity columns
+        # Find stock/sales quantity columns
         for col in sales_clean.columns:
             col_str = str(col).lower()
             if 'stock' in col_str and 'qty' in col_str and 'current' in col_str:
@@ -767,7 +940,6 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
                 sales_processed['sales_qty'] = pd.to_numeric(sales_clean[col], errors='coerce').fillna(0)
                 print(f"Found sales quantity column: {col}")
         
-        # Set defaults if columns not found
         if 'current_stock' not in sales_processed.columns:
             sales_processed['current_stock'] = 0
             print("Current stock column not found, defaulting to 0")
@@ -776,7 +948,7 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
             sales_processed['sales_qty'] = 0  
             print("Sales quantity column not found, defaulting to 0")
         
-        # STEP 4: FILTER VALID RECORDS
+        # Filter valid records
         warehouse_processed = warehouse_processed[
             (warehouse_processed['article_code'].notna()) & 
             (warehouse_processed['article_code'] != '') & 
@@ -790,18 +962,11 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         
         print(f"After filtering - Warehouse: {warehouse_processed.shape}, Sales: {sales_processed.shape}")
         
-        # Show sample data to verify correct mapping
-        print("\nSample warehouse data after correct mapping:")
-        print(warehouse_processed.head(3))
-        print("\nSample sales data after correct mapping:")
-        print(sales_processed.head(3))
-        
-        # STEP 5: HANDLE DUPLICATE ARTICLES  
+        # Handle duplicate articles  
         duplicate_articles = warehouse_processed['article_key'].duplicated().sum()
         print(f"Found {duplicate_articles} duplicate articles in warehouse data")
         
         if duplicate_articles > 0:
-            # Group by article_key and sum quantities, keep first occurrence of other fields
             warehouse_processed = warehouse_processed.groupby('article_key').agg({
                 'company_code': 'first',
                 'department': 'first',
@@ -810,13 +975,11 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
                 'brand': 'first',
                 'article_code': 'first',
                 'article_description': 'first',
-                'total_quantity': 'sum'  # Sum quantities for duplicates
+                'total_quantity': 'sum'
             }).reset_index()
             print(f"After aggregating duplicates: {warehouse_processed.shape}")
         
-        # STEP 6: CONTINUE WITH STOCK DISTRIBUTION LOGIC
-        
-        # Calculate sales conversion for each article at each site
+        # Calculate sales conversion
         sales_processed['total_grn'] = sales_processed['sales_qty'] + sales_processed['current_stock']
         sales_processed['sales_conversion'] = np.where(
             sales_processed['total_grn'] > 0,
@@ -846,17 +1009,14 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         for _, item in high_conversion_items.iterrows():
             article_key = item['article_key']
             
-            # Check if article is available in warehouse
             if article_key not in warehouse_lookup:
                 continue
                 
             warehouse_stock = warehouse_lookup[article_key]
             
-            # Check MC conversion
             mc_key = f"{item['company_code']}_{item['nesto_mc']}"
             mc_conversion = mc_conversions.get(mc_key, 0)
             
-            # Only distribute if MC conversion > 60%
             if mc_conversion > 60:
                 max_distribution = min(12, warehouse_stock['total_quantity'])
                 
@@ -864,8 +1024,8 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
                     'warehouse_code': warehouse_stock['company_code'],
                     'article_code': warehouse_stock['article_code'],
                     'article_description': warehouse_stock['article_description'],
-                    'nesto_mc': item['nesto_mc'],      # NOW CORRECT
-                    'brand': item['brand'],            # NOW CORRECT
+                    'nesto_mc': item['nesto_mc'],
+                    'brand': item['brand'],
                     'site_code': item['company_code'],
                     'article_sales_conversion': round(item['sales_conversion'], 2),
                     'mc_conversion': round(mc_conversion, 2),
@@ -876,7 +1036,7 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         
         print(f"Distribution results before conflict resolution: {len(distribution_results)}")
         
-        # Handle conflicts when multiple sites need the same article
+        # Handle conflicts
         distribution_by_article = defaultdict(list)
         for dist in distribution_results:
             distribution_by_article[dist['article_code']].append(dist)
@@ -886,7 +1046,6 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
             if len(sites) == 1:
                 final_distribution.append(sites[0])
             else:
-                # Sort by sales conversion (descending)
                 sites.sort(key=lambda x: x['article_sales_conversion'], reverse=True)
                 
                 warehouse_qty = sites[0]['warehouse_total_qty']
@@ -920,13 +1079,12 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
                 'Warehouse Total Quantity': distributions[0]['warehouse_total_qty'],
                 'Article Code': distributions[0]['article_code'],
                 'Article Description': distributions[0]['article_description'],
-                'Nesto MC': distributions[0]['nesto_mc'],    # NOW CORRECT
-                'Brand': distributions[0]['brand']           # NOW CORRECT
+                'Nesto MC': distributions[0]['nesto_mc'],
+                'Brand': distributions[0]['brand']
             }
             
-            # Add site distributions as columns (without "Site_" prefix and without conversion)
             for dist in distributions:
-                pivot_row[dist['site_code']] = dist['distribution_qty']  # Just site code and quantity
+                pivot_row[dist['site_code']] = dist['distribution_qty']
             
             pivot_data.append(pivot_row)
         
@@ -935,8 +1093,8 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
             'Warehouse Code': item['warehouse_code'],
             'Article Code': item['article_code'],
             'Article Description': item['article_description'],
-            'Nesto MC': item['nesto_mc'],      # NOW CORRECT
-            'Brand': item['brand'],            # NOW CORRECT  
+            'Nesto MC': item['nesto_mc'],
+            'Brand': item['brand'],
             'Site Code': item['site_code'],
             'Warehouse Total Qty': item['warehouse_total_qty'],
             'Distribution Qty': item['distribution_qty'],
@@ -957,26 +1115,20 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         
         print(f"Summary: {summary_stats}")
         
-        # Create output file path
         output_path = f"downloads/{file_id}_stock_distribution.xlsx"
         
-        # Create Excel file with multiple sheets
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-            # Pivot table sheet
             if pivot_data:
                 pivot_df = pd.DataFrame(pivot_data)  
                 pivot_df.to_excel(writer, sheet_name='Stock Distribution Pivot', index=False)
             
-            # Detailed distribution sheet
             if detailed_data:
                 detailed_df = pd.DataFrame(detailed_data)
                 detailed_df.to_excel(writer, sheet_name='Detailed Distribution', index=False)
             
-            # Summary sheet
             summary_df = pd.DataFrame([summary_stats])
             summary_df.to_excel(writer, sheet_name='Summary', index=False)
             
-            # Auto-adjust column widths for all sheets
             for sheet_name in writer.sheets:
                 worksheet = writer.sheets[sheet_name]
                 for column in worksheet.columns:
@@ -999,14 +1151,14 @@ def process_stock_distribution(warehouse_file_path: str, sales_file_path: str, f
         import traceback
         traceback.print_exc()
         raise Exception(f"Error processing stock distribution: {str(e)}")
-    
+
 @app.post("/upload/{tool_id}")
 async def upload_file(
     tool_id: str,
     request: Request,
     user_info: dict = Depends(verify_credentials)
 ):
-    print(f"\n=== SAP BI UPLOAD DEBUG START ===")
+    print(f"\n=== UPLOAD DEBUG START ===")
     print(f"Tool ID: {tool_id}")
     print(f"User: {user_info['username']}")
     
@@ -1014,11 +1166,9 @@ async def upload_file(
         raise HTTPException(status_code=404, detail="Tool not found")
     
     try:
-        # Get form data
         form = await request.form()
         print(f"Form keys: {list(form.keys())}")
         
-        # Handle stock distribution tool (requires two files)
         if tool_id == "stock_distribution":
             warehouse_file = form.get("warehouse_file")
             sales_file = form.get("sales_file")
@@ -1026,76 +1176,59 @@ async def upload_file(
             if not warehouse_file or not sales_file:
                 raise HTTPException(status_code=400, detail="Both warehouse_file and sales_file are required")
             
-            # Check if they're actually files
             if not hasattr(warehouse_file, 'filename') or not hasattr(sales_file, 'filename'):
                 raise HTTPException(status_code=400, detail="Invalid file uploads")
             
             print(f"Files received - Warehouse: {warehouse_file.filename}, Sales: {sales_file.filename}")
             
-            # Validate file types
             if not warehouse_file.filename.endswith(('.xlsx', '.xls')):
                 raise HTTPException(status_code=400, detail="Warehouse file must be Excel format")
             
             if not sales_file.filename.endswith(('.xlsx', '.xls')):
                 raise HTTPException(status_code=400, detail="Sales file must be Excel format")
             
-            # Generate unique file ID
             file_id = str(uuid.uuid4())
             
-            # Save both files
             warehouse_path = f"uploads/{file_id}_warehouse_{warehouse_file.filename}"
             sales_path = f"uploads/{file_id}_sales_{sales_file.filename}"
             
             try:
-                # Save warehouse file
                 warehouse_content = await warehouse_file.read()
                 with open(warehouse_path, "wb") as buffer:
                     buffer.write(warehouse_content)
                 print(f"Warehouse file saved: {len(warehouse_content)} bytes")
                 
-                # Save sales file
                 sales_content = await sales_file.read()
                 with open(sales_path, "wb") as buffer:
                     buffer.write(sales_content)
                 print(f"Sales file saved: {len(sales_content)} bytes")
                 
             except Exception as e:
-                # Clean up any saved files on error
                 for path in [warehouse_path, sales_path]:
                     if os.path.exists(path):
                         os.remove(path)
                 raise HTTPException(status_code=500, detail=f"Error saving files: {str(e)}")
             
-            # Read SAP BI files using the specialized function
             try:
-                print("=== READING SAP BI WAREHOUSE FILE ===")
+                print("=== READING SAP BI FILES ===")
                 warehouse_df = read_sap_bi_excel(warehouse_path, "warehouse")
-                
-                print("=== READING SAP BI SALES FILE ===")
                 sales_df = read_sap_bi_excel(sales_path, "sales")
                 
-                # Validate we got data
                 if warehouse_df.empty:
-                    raise Exception("No valid data found in warehouse file. Please check if the file contains actual data sheets.")
+                    raise Exception("No valid data found in warehouse file")
                 
                 if sales_df.empty:
-                    raise Exception("No valid data found in sales file. Please check if the file contains actual data sheets.")
+                    raise Exception("No valid data found in sales file")
                 
                 print(f"Final validation - Warehouse: {warehouse_df.shape}, Sales: {sales_df.shape}")
                 
-                # Show sample data for verification
-                print("Warehouse sample columns:", list(warehouse_df.columns)[:10])
-                print("Sales sample columns:", list(sales_df.columns)[:10])
-                
             except Exception as e:
-                print(f"ERROR during SAP BI file reading: {e}")
-                # Clean up files if error occurs
+                print(f"ERROR during file reading: {e}")
                 for path in [warehouse_path, sales_path]:
                     if os.path.exists(path):
                         os.remove(path)
-                raise HTTPException(status_code=400, detail=f"Error reading SAP BI Excel files: {str(e)}")
+                raise HTTPException(status_code=400, detail=f"Error reading Excel files: {str(e)}")
             
-            # Store file info
             file_storage[file_id] = {
                 "warehouse_path": warehouse_path,
                 "sales_path": sales_path,
@@ -1108,17 +1241,16 @@ async def upload_file(
                 "processed": False
             }
             
-            print(f"SUCCESS: SAP BI files uploaded with ID {file_id}")
-            print(f"=== SAP BI UPLOAD DEBUG END ===\n")
+            print(f"SUCCESS: Files uploaded with ID {file_id}")
+            print(f"=== UPLOAD DEBUG END ===\n")
             
             return {
                 "file_id": file_id,
                 "warehouse_filename": warehouse_file.filename,
                 "sales_filename": sales_file.filename,
-                "message": "SAP BI files uploaded successfully. Ready for processing."
+                "message": "Files uploaded successfully. Ready for processing."
             }
         
-        # Handle other tools (single file)
         else:
             file = form.get("file")
             
@@ -1128,14 +1260,10 @@ async def upload_file(
             if not hasattr(file, 'filename'):
                 raise HTTPException(status_code=400, detail="Invalid file upload")
             
-            # Validate file type
             if not file.filename.endswith(('.xlsx', '.xls')):
                 raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are allowed")
             
-            # Generate unique file ID
             file_id = str(uuid.uuid4())
-            
-            # Save uploaded file
             file_path = f"uploads/{file_id}_{file.filename}"
             
             try:
@@ -1147,7 +1275,6 @@ async def upload_file(
                     os.remove(file_path)
                 raise HTTPException(status_code=500, detail=f"Error saving file: {str(e)}")
             
-            # For other tools, also use SAP BI compatible reading
             try:
                 df = read_sap_bi_excel(file_path, "general")
                 
@@ -1157,7 +1284,6 @@ async def upload_file(
                 
                 columns = df.columns.tolist()
                 
-                # For summarizer tool, get column data types
                 column_info = {}
                 if tool_id == "data_summarizer":
                     for col in columns:
@@ -1171,7 +1297,6 @@ async def upload_file(
                     os.remove(file_path)
                 raise HTTPException(status_code=400, detail=f"Error reading Excel file: {str(e)}")
             
-            # Store file info
             file_storage[file_id] = {
                 "original_path": file_path,
                 "original_filename": file.filename,

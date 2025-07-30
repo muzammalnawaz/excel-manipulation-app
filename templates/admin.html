@@ -127,6 +127,7 @@
 
         .card:nth-child(2) { animation-delay: 0.1s; }
         .card:nth-child(3) { animation-delay: 0.2s; }
+        .card:nth-child(4) { animation-delay: 0.3s; }
 
         @keyframes fadeInUp {
             from {
@@ -249,6 +250,18 @@
             box-shadow: 0 6px 12px rgba(229, 62, 62, 0.4);
         }
 
+        .refresh-btn {
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            color: white;
+            padding: 8px 16px;
+            font-size: 12px;
+            box-shadow: 0 4px 8px rgba(56, 161, 105, 0.3);
+        }
+
+        .refresh-btn:hover {
+            box-shadow: 0 6px 12px rgba(56, 161, 105, 0.4);
+        }
+
         .users-table {
             width: 100%;
             border-collapse: collapse;
@@ -280,6 +293,122 @@
         .users-table tr:hover {
             background: rgba(102, 126, 234, 0.05);
             transform: scale(1.01);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 24px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            color: #718096;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .stat-uploads { color: #3182ce; }
+        .stat-downloads { color: #38a169; }
+        .stat-active { color: #ed8936; }
+        .stat-users { color: #9f7aea; }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-healthy { background: #38a169; }
+        .status-warning { background: #ed8936; }
+        .status-error { background: #e53e3e; }
+
+        .system-info {
+            background: rgba(56, 161, 105, 0.1);
+            border: 2px solid #38a169;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .system-info h4 {
+            color: #22543d;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .info-item {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .info-value {
+            color: #2d3748;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .upcoming-expirations {
+            background: rgba(237, 137, 54, 0.1);
+            border: 2px solid #ed8936;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .upcoming-expirations h4 {
+            color: #9c4221;
+            margin-bottom: 12px;
+        }
+
+        .expiration-item {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin: 8px 0;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .expiration-time {
+            font-weight: 600;
+            color: #9c4221;
         }
 
         .modal {
@@ -360,57 +489,52 @@
             background: rgba(229, 62, 62, 0.1);
         }
 
-        .floating-elements {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 0;
+        .success-message {
+            background: linear-gradient(135deg, #9ae6b4, #68d391);
+            color: #22543d;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            display: none;
+            border-left: 4px solid #38a169;
+            animation: slideInRight 0.5s ease-out;
         }
 
-        .floating-element {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.05);
+        .error-message {
+            background: linear-gradient(135deg, #fed7d7, #feb2b2);
+            color: #c53030;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            display: none;
+            border-left: 4px solid #e53e3e;
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
             border-radius: 50%;
-            animation: float 15s ease-in-out infinite;
+            animation: spin 1s linear infinite;
         }
 
-        .floating-element:nth-child(1) {
-            width: 120px;
-            height: 120px;
-            top: 10%;
-            left: 10%;
-            animation-delay: 0s;
-        }
-
-        .floating-element:nth-child(2) {
-            width: 80px;
-            height: 80px;
-            top: 60%;
-            right: 10%;
-            animation-delay: 5s;
-        }
-
-        .floating-element:nth-child(3) {
-            width: 160px;
-            height: 160px;
-            bottom: 20%;
-            left: 50%;
-            animation-delay: 10s;
-        }
-
-        @keyframes float {
-            0%, 100% {
-                transform: translateY(0px) rotate(0deg);
-            }
-            33% {
-                transform: translateY(-20px) rotate(120deg);
-            }
-            66% {
-                transform: translateY(10px) rotate(240deg);
-            }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         @media (max-width: 768px) {
@@ -432,6 +556,11 @@
                 font-size: 28px;
             }
             
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 16px;
+            }
+            
             .users-table {
                 font-size: 14px;
             }
@@ -446,43 +575,75 @@
                 width: 95%;
             }
         }
-
-        .success-message {
-            background: linear-gradient(135deg, #9ae6b4, #68d391);
-            color: #22543d;
-            padding: 16px 20px;
-            border-radius: 12px;
-            margin: 16px 0;
-            display: none;
-            border-left: 4px solid #38a169;
-            animation: slideInRight 0.5s ease-out;
-        }
-
-        @keyframes slideInRight {
-            from {
-                opacity: 0;
-                transform: translateX(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
     </style>
 </head>
 <body>
-    <div class="floating-elements">
-        <div class="floating-element"></div>
-        <div class="floating-element"></div>
-        <div class="floating-element"></div>
-    </div>
-
     <div class="container">
         <div class="header">
             <h1>Admin Dashboard</h1>
             <button class="logout" onclick="logout()">Logout</button>
         </div>
 
+        <!-- Messages -->
+        <div id="messages"></div>
+
+        <!-- System Status Card -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2>System Status</h2>
+                <button class="refresh-btn" onclick="refreshSystemStatus()">
+                    <span id="refreshIcon">🔄</span> Refresh
+                </button>
+            </div>
+            
+            <div class="stats-grid" id="systemStats">
+                <div class="stat-card">
+                    <div class="stat-number stat-uploads" id="uploadsCount">--</div>
+                    <div class="stat-label">Upload Files</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number stat-downloads" id="downloadsCount">--</div>
+                    <div class="stat-label">Download Files</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number stat-active" id="activeFiles">--</div>
+                    <div class="stat-label">Active File Sets</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number stat-users" id="activeUsers">--</div>
+                    <div class="stat-label">Active Users</div>
+                </div>
+            </div>
+
+            <div class="system-info" id="systemInfo">
+                <h4><span class="status-indicator status-healthy"></span>System Health: Loading...</h4>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Uploads Size:</div>
+                        <div class="info-value" id="uploadsSize">-- MB</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Downloads Size:</div>
+                        <div class="info-value" id="downloadsSize">-- MB</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Cleanup Interval:</div>
+                        <div class="info-value">2 minutes</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Upload Retention:</div>
+                        <div class="info-value">15 minutes</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="upcoming-expirations" id="upcomingExpirations" style="display: none;">
+                <h4>⏰ Upcoming File Expirations</h4>
+                <div id="expirationsList"></div>
+            </div>
+        </div>
+
+        <!-- User Management Card -->
         <div class="card">
             <h2>Create New User</h2>
             <form id="createUserForm">
@@ -505,6 +666,7 @@
             </form>
         </div>
 
+        <!-- Existing Users Card -->
         <div class="card">
             <h2>Existing Users</h2>
             <table class="users-table">
@@ -562,42 +724,54 @@
     </div>
 
     <script>
-        // Set up authentication on page load
-        window.addEventListener('load', function() {
-            const auth = sessionStorage.getItem('auth');
-            const username = sessionStorage.getItem('username');
-            
-            if (auth && username) {
-                setupAuthHeaders(auth);
-                // Set welcome message based on user
-                const welcomeElement = document.getElementById('welcomeMessage');
-                if (username === 'admin') {
-                    welcomeElement.textContent = 'Welcome Admin!';
-                } else {
-                    welcomeElement.textContent = `Welcome, ${username}!`;
-                }
-            } else {
-                // No auth, redirect to login
-                window.location.href = '/';
-            }
-        });
+        console.log('Admin page loaded');
 
-        function setupAuthHeaders(credentials) {
-            // Store auth globally
-            window.authCredentials = credentials;
+        // Check authentication immediately
+        const auth = sessionStorage.getItem('auth');
+        const username = sessionStorage.getItem('username');
+        
+        console.log('Auth check:', { auth: !!auth, username });
+
+        if (!auth || !username) {
+            console.log('No auth found, redirecting to login');
+            window.location.href = '/';
+        } else {
+            console.log('Auth found, setting up page');
+            setupPage();
+        }
+
+        function setupPage() {
+            setupAuthHeaders();
             
+            // Set up form event listeners
+            setupFormHandlers();
+            
+            // Load system status
+            refreshSystemStatus();
+            
+            // Auto-refresh system status every 30 seconds
+            setInterval(refreshSystemStatus, 30000);
+        }
+
+        function setupAuthHeaders() {
+            const auth = sessionStorage.getItem('auth');
+            if (!auth) {
+                console.error('No auth credentials found');
+                return;
+            }
+
             // Override fetch to include auth headers
             const originalFetch = window.fetch;
             window.fetch = function(...args) {
-                const auth = window.authCredentials || sessionStorage.getItem('auth');
-                if (auth) {
+                const currentAuth = sessionStorage.getItem('auth');
+                if (currentAuth) {
                     if (args[1]) {
                         args[1].headers = args[1].headers || {};
-                        args[1].headers['Authorization'] = 'Basic ' + auth;
+                        args[1].headers['Authorization'] = 'Basic ' + currentAuth;
                     } else {
                         args[1] = {
                             headers: {
-                                'Authorization': 'Basic ' + auth
+                                'Authorization': 'Basic ' + currentAuth
                             }
                         };
                     }
@@ -606,13 +780,122 @@
             };
         }
 
+        function setupFormHandlers() {
+            // Create user form
+            const createForm = document.getElementById('createUserForm');
+            if (createForm) {
+                createForm.addEventListener('submit', handleCreateUser);
+            }
+
+            // Edit user form
+            const editForm = document.getElementById('editUserForm');
+            if (editForm) {
+                editForm.addEventListener('submit', handleEditUser);
+            }
+        }
+
+        async function handleCreateUser(e) {
+            e.preventDefault();
+            console.log('Create user form submitted');
+            
+            const formData = new FormData(e.target);
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            
+            // Show loading state
+            submitBtn.textContent = 'Creating...';
+            submitBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/admin/create_user', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Create user response status:', response.status);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('User created successfully:', result);
+                    showMessage('User created successfully!', 'success');
+                    e.target.reset(); // Clear form
+                    setTimeout(() => location.reload(), 1500); // Reload to show new user
+                } else {
+                    const error = await response.json();
+                    console.error('Create user error:', error);
+                    showMessage('Error: ' + error.detail, 'error');
+                }
+            } catch (error) {
+                console.error('Create user network error:', error);
+                showMessage('Network error: ' + error.message, 'error');
+            } finally {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+
+        async function handleEditUser(e) {
+            e.preventDefault();
+            console.log('Edit user form submitted');
+            
+            const formData = new FormData(e.target);
+            const username = formData.get('username');
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            
+            // Show loading state
+            submitBtn.textContent = 'Updating...';
+            submitBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`/admin/update_user/${username}`, {
+                    method: 'PUT',
+                    body: formData
+                });
+                
+                console.log('Update user response status:', response.status);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('User updated successfully:', result);
+                    showMessage('User updated successfully!', 'success');
+                    closeEditModal();
+                    setTimeout(() => location.reload(), 1500); // Reload to show changes
+                } else {
+                    const error = await response.json();
+                    console.error('Update user error:', error);
+                    showMessage('Error: ' + error.detail, 'error');
+                }
+            } catch (error) {
+                console.error('Update user network error:', error);
+                showMessage('Network error: ' + error.message, 'error');
+            } finally {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+
+        function showMessage(message, type = 'success') {
+            const messagesDiv = document.getElementById('messages');
+            const messageClass = type === 'success' ? 'success-message' : 'error-message';
+            
+            messagesDiv.innerHTML = `<div class="${messageClass}" style="display: block;">${message}</div>`;
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                messagesDiv.innerHTML = '';
+            }, 5000);
+        }
+
         function logout() {
+            console.log('Logout clicked');
             sessionStorage.removeItem('auth');
             sessionStorage.removeItem('username');
             window.location.href = '/';
         }
 
         function editUser(username, currentRole) {
+            console.log('Edit user clicked:', username, currentRole);
             document.getElementById('editUsername').value = username;
             document.getElementById('editPassword').value = '';
             document.getElementById('editRole').value = currentRole;
@@ -623,81 +906,120 @@
             document.getElementById('editModal').style.display = 'none';
         }
 
-        function deleteUser(username) {
+        async function deleteUser(username) {
             if (confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
-                fetch(`/admin/delete_user/${username}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': 'Basic ' + (window.authCredentials || sessionStorage.getItem('auth'))
-                    }
-                })
-                .then(response => {
+                console.log('Delete user confirmed:', username);
+                
+                try {
+                    const response = await fetch(`/admin/delete_user/${username}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    console.log('Delete user response status:', response.status);
+                    
                     if (response.ok) {
-                        alert('User deleted successfully');
-                        location.reload();
+                        const result = await response.json();
+                        console.log('User deleted successfully:', result);
+                        showMessage('User deleted successfully!', 'success');
+                        setTimeout(() => location.reload(), 1500);
                     } else {
-                        return response.json().then(error => {
-                            alert('Error: ' + error.detail);
-                        });
+                        const error = await response.json();
+                        console.error('Delete user error:', error);
+                        showMessage('Error: ' + error.detail, 'error');
                     }
-                })
-                .catch(error => {
-                    alert('Error deleting user: ' + error.message);
-                });
+                } catch (error) {
+                    console.error('Delete user network error:', error);
+                    showMessage('Network error: ' + error.message, 'error');
+                }
             }
         }
 
-        document.getElementById('editUserForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const username = formData.get('username');
+        async function refreshSystemStatus() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            refreshIcon.innerHTML = '<span class="loading"></span>';
             
             try {
-                const response = await fetch(`/admin/update_user/${username}`, {
-                    method: 'PUT',
-                    body: formData,
-                    headers: {
-                        'Authorization': 'Basic ' + (window.authCredentials || sessionStorage.getItem('auth'))
-                    }
-                });
-                
+                const response = await fetch('/admin/system_status');
                 if (response.ok) {
-                    alert('User updated successfully');
-                    closeEditModal();
-                    location.reload();
+                    const status = await response.json();
+                    updateSystemStatus(status);
                 } else {
-                    const error = await response.json();
-                    alert('Error: ' + error.detail);
+                    console.error('Failed to fetch system status');
+                    updateSystemStatus({ status: 'error', error: 'Failed to fetch status' });
                 }
             } catch (error) {
-                alert('Error updating user: ' + error.message);
+                console.error('Error fetching system status:', error);
+                updateSystemStatus({ status: 'error', error: error.message });
+            } finally {
+                refreshIcon.innerHTML = '🔄';
             }
-        });
+        }
 
-        document.getElementById('createUserForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+        function updateSystemStatus(status) {
+            console.log('Updating system status:', status);
             
-            const formData = new FormData(this);
-            
-            try {
-                const response = await fetch('/admin/create_user', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'Authorization': 'Basic ' + (window.authCredentials || sessionStorage.getItem('auth'))
-                    }
+            // Update stat cards
+            if (status.file_system) {
+                document.getElementById('uploadsCount').textContent = status.file_system.uploads.count;
+                document.getElementById('downloadsCount').textContent = status.file_system.downloads.count;
+                document.getElementById('uploadsSize').textContent = status.file_system.uploads.size_mb + ' MB';
+                document.getElementById('downloadsSize').textContent = status.file_system.downloads.size_mb + ' MB';
+            } else {
+                // Set defaults if no data
+                document.getElementById('uploadsCount').textContent = '0';
+                document.getElementById('downloadsCount').textContent = '0';
+                document.getElementById('uploadsSize').textContent = '0 MB';
+                document.getElementById('downloadsSize').textContent = '0 MB';
+            }
+
+            if (status.active_sessions) {
+                document.getElementById('activeFiles').textContent = status.active_sessions.file_sets;
+                document.getElementById('activeUsers').textContent = status.active_sessions.active_users;
+            } else {
+                document.getElementById('activeFiles').textContent = '0';
+                document.getElementById('activeUsers').textContent = '0';
+            }
+
+            // Update system health indicator
+            const systemInfo = document.getElementById('systemInfo');
+            const healthText = systemInfo.querySelector('h4');
+
+            if (status.status === 'healthy') {
+                healthText.innerHTML = '<span class="status-indicator status-healthy"></span>System Health: Healthy ✅';
+            } else if (status.status === 'error') {
+                healthText.innerHTML = '<span class="status-indicator status-error"></span>System Health: Error ❌';
+                console.error('System error:', status.error);
+            } else {
+                healthText.innerHTML = '<span class="status-indicator status-warning"></span>System Health: Warning ⚠️';
+            }
+
+            // Update upcoming expirations
+            const expirationsDiv = document.getElementById('upcomingExpirations');
+            const expirationsList = document.getElementById('expirationsList');
+
+            if (status.active_sessions && status.active_sessions.upcoming_expirations && status.active_sessions.upcoming_expirations.length > 0) {
+                expirationsDiv.style.display = 'block';
+                expirationsList.innerHTML = '';
+
+                status.active_sessions.upcoming_expirations.forEach(exp => {
+                    const item = document.createElement('div');
+                    item.className = 'expiration-item';
+                    item.innerHTML = `
+                        <span>${exp.file_id} (${exp.tool}) - ${exp.user}</span>
+                        <span class="expiration-time">${exp.minutes_left}min left</span>
+                    `;
+                    expirationsList.appendChild(item);
                 });
-                
-                if (response.ok) {
-                    alert('User created successfully');
-                    location.reload();
-                } else {
-                    const error = await response.json();
-                    alert('Error: ' + error.detail);
-                }
-            } catch (error) {
-                alert('Error creating user: ' + error.message);
+            } else {
+                expirationsDiv.style.display = 'none';
+            }
+        }
+
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('editModal');
+            if (event.target === modal) {
+                closeEditModal();
             }
         });
     </script>
