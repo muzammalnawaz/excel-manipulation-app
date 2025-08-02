@@ -23,6 +23,9 @@ class FileSession(BaseModel):
     columns: Optional[List[str]] = None
     column_info: Optional[Dict[str, str]] = None
     
+    # Enhanced: Summary data for dynamic display
+    summary_data: Optional[Dict[str, Any]] = None
+    
     class Config:
         schema_extra = {
             "example": {
@@ -40,3 +43,4 @@ class FileStatus(BaseModel):
     processed: bool
     time_left_seconds: int
     expires_at: str
+    summary_data: Optional[Dict[str, Any]] = None  # Enhanced: Include summary if available

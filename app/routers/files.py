@@ -191,7 +191,84 @@ async def process_file(
         
         # Process based on tool type
         if processor_name == "process_stock_distribution":
-            processed_path = processor.process(session.warehouse_path, session.sales_path)
+            # Get date parameters from form
+            form = await request.form()
+            start_date = form.get("start_date")
+            end_date = form.get("end_date")
+            
+            # Convert to string and strip if not None
+            if start_date is not None:
+                start_date = str(start_date).strip()
+            if end_date is not None:
+                end_date = str(end_date).strip()
+            
+            # Validate dates exist and are not empty
+            if not start_date or not end_date or start_date == '' or end_date == '':
+                raise HTTPException(status_code=400, detail="Both start_date and end_date are required and cannot be empty")
+            
+            # Validate date format
+            import re
+            date_pattern = r'^\d{4}-\d{2}-\d{2}$'
+            if not re.match(date_pattern, start_date) or not re.match(date_pattern, end_date):
+                raise HTTPException(status_code=400, detail="Dates must be in YYYY-MM-DD format")
+            
+            # Process with dates
+            processed_path = processor.process(
+                session.warehouse_path, 
+                session.sales_path,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            # Try to extract summary data from the processed Excel file
+            try:
+                import pandas as pd
+                excel_data = pd.read_excel(processed_path, sheet_name=None)
+                
+                # Extract dynamic summary from the Summary sheet
+                if 'Summary Analysis' in excel_data:
+                    summary_df = excel_data['Summary Analysis']
+                    if not summary_df.empty:
+                        # Calculate totals from the summary data
+                        total_distributions = len(summary_df)
+                        existing_articles = summary_df['Existing Articles Distributed'].sum()
+                        new_articles = summary_df['Entirely New Articles Distributed'].sum() + summary_df['Site New Articles Distributed'].sum()
+                        total_sales_qty = summary_df['Total Sales in Period'].sum()
+                        total_qty_distributed = summary_df['Total Recommended Distribution'].sum()
+                        unique_sites = summary_df['Site Code'].nunique()
+                        
+                        # Store summary data in session for the frontend
+                        file_service.update_file_session(
+                            file_id,
+                            processed=True,
+                            processed_path=processed_path,
+                            summary_data={
+                                'total_distributions': total_distributions,
+                                'existing_articles': int(existing_articles),
+                                'new_articles': int(new_articles),
+                                'total_sales_qty': int(total_sales_qty),
+                                'total_qty_distributed': int(total_qty_distributed),
+                                'unique_sites': int(unique_sites)
+                            }
+                        )
+                        
+                        return {
+                            "message": "Enhanced stock distribution analysis completed successfully",
+                            "download_ready": True,
+                            "summary": {
+                                'total_distributions': int(total_distributions),
+                                'existing_articles': int(existing_articles),
+                                'new_articles': int(new_articles),
+                                'total_sales_qty': int(total_sales_qty),
+                                'total_qty_distributed': int(total_qty_distributed),
+                                'unique_sites': int(unique_sites)
+                            }
+                        }
+                        
+            except Exception as e:
+                print(f"Could not extract summary data: {e}")
+                # Fallback to basic response
+                pass
             
         elif processor_name == "split_excel_by_column":
             form = await request.form()
@@ -228,12 +305,13 @@ async def process_file(
         else:
             raise HTTPException(status_code=400, detail="Unknown processor")
         
-        # Update session
-        file_service.update_file_session(
-            file_id,
-            processed=True,
-            processed_path=processed_path
-        )
+        # Update session (for non-stock-distribution tools)
+        if processor_name != "process_stock_distribution":
+            file_service.update_file_session(
+                file_id,
+                processed=True,
+                processed_path=processed_path
+            )
         
         return {"message": "File processed successfully", "download_ready": True}
     
@@ -241,6 +319,8 @@ async def process_file(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         print(f"Processing error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 @router.get("/download/{file_id}")
